@@ -1,0 +1,174 @@
+
+\documentclass[11pt]{article}
+\input{../shared/project_style.tex}
+\rhead{Module 2}
+\begin{document}
+
+\DocTitle{Module 2: Superconducting Low-Temperature Physics}{BCS gap physics, quasiparticles, recombination, diffusion, and trapping}{Physics note for FEM\_BallisticDiffusion\_PINN}
+
+\begin{overviewbox}
+\textbf{Purpose.} This note explains how the transport model changes when the device is cooled from room temperature to superconducting-qubit operating temperature. The room-temperature heat-carrier picture remains useful, but superconductivity introduces a new energy scale, the superconducting energy gap, and a new failure-relevant carrier population: quasiparticles. The practical goal is to obtain reduced equations suitable for FEM simulation of quasiparticle poisoning and trap/heat-sink design.
+\end{overviewbox}
+
+\ProjectTOC
+
+\SymbolsAcronymsSection
+\begin{symtable}
+BCS & Bardeen-Cooper-Schrieffer theory & Microscopic theory of conventional superconductivity based on Cooper pairing. \\
+$T_c$ & Critical temperature & Temperature below which a material becomes superconducting. \\
+$T$ & Temperature & Local or bath temperature. \\
+$\Delta(T)$ & Superconducting energy gap & Minimum quasiparticle excitation energy scale in a conventional superconductor. \\
+$\Delta_0$ & Zero-temperature gap & Approximate value of $\Delta(T)$ as $T\to0$. \\
+$N_0$ & Normal-state density of states & Single-spin electronic density of states at the Fermi level, depending on convention. \\
+$n_{\qp}$ & Quasiparticle density & Density of broken-pair excitations in the superconducting film. \\
+$n_{\qp}^{\mathrm{eq}}$ & Equilibrium quasiparticle density & Thermal-equilibrium quasiparticle density predicted by the gap and temperature. \\
+$D_{\qp}$ & Quasiparticle diffusion coefficient & Effective spatial diffusion coefficient for quasiparticles. \\
+$R$ & Recombination coefficient & Coefficient for two-quasiparticle recombination into a Cooper pair. \\
+$\Gamma_{\mathrm{trap}}$ & Trap removal rate & Position-dependent quasiparticle removal rate due to normal-metal traps or engineered sinks. \\
+$S_{\qp}$ & Quasiparticle source & Generation rate density from photons, phonons, heating, or other nonequilibrium events. \\
+$C_s$ & Superconducting heat capacity & Electronic heat capacity in the superconducting state. \\
+$k_s$ & Superconducting thermal conductivity & Effective thermal conductivity in the superconducting state. \\
+$\Omega_{\JJ}$ & Junction-sensitive region & Effective volume around the Josephson junction where quasiparticles are most harmful. \\
+JJ & Josephson junction & Weak link between superconductors that provides nonlinearity to a superconducting qubit. \\
+QP & Quasiparticle & Excitation formed when Cooper-pair condensate order is locally broken or excited. \\
+\end{symtable}
+
+\section{Why cooling changes the physics}
+At room temperature, electrons and phonons can often be modeled as heat carriers whose energy density and flux can be connected to temperature, conductivity, and mean free path. At superconducting-qubit temperatures, the electronic system is no longer a normal metal. A macroscopic condensate of Cooper pairs forms, and single-particle excitations require energy at least on the order of the superconducting energy gap $\Delta$.
+
+This changes the modeling target. The design question is not only how to move heat away. It is also how to reduce the density of nonequilibrium quasiparticles near the Josephson junction. A small number of quasiparticles in the wrong place can matter because they can tunnel across the junction, change parity, introduce loss, and disrupt qubit operation.
+
+\section{Minimal BCS energy scale}
+For a conventional weak-coupling BCS superconductor, the zero-temperature gap is approximately
+\begin{equation}
+\Delta_0 \approx 1.764\,\kB T_c.
+\label{eq:bcs_gap_zero}
+\end{equation}
+A commonly used interpolation for the temperature dependence is
+\begin{equation}
+\Delta(T) \approx \Delta_0\tanh\left[1.74\sqrt{\frac{T_c}{T}-1}\right],\qquad 0<T<T_c.
+\label{eq:bcs_gap_interp}
+\end{equation}
+This formula is not the full self-consistent BCS gap equation, but it is useful for engineering-level reduced modeling.
+
+The key physical point is exponential suppression. At temperatures well below $T_c$, thermal quasiparticles are rare because creating them costs energy $\Delta$.
+
+\section{Equilibrium quasiparticle density}
+For $\kB T\ll \Delta$, the equilibrium quasiparticle density has the approximate asymptotic form
+\begin{equation}
+n_{\qp}^{\mathrm{eq}}(T)\approx 2N_0\sqrt{2\pi \kB T\Delta(T)}\,\exp\left[-\frac{\Delta(T)}{\kB T}\right].
+\label{eq:eq_qp_density}
+\end{equation}
+The exponential factor is the dominant physics. A small reduction in $\Delta/\kB T$ can strongly increase the thermal quasiparticle population.
+
+\begin{physicsbox}
+\textbf{Interpretation.} In an ideal cold superconductor, the thermal quasiparticle density should be exponentially small. If experiments observe more quasiparticles than Eq.~\eqref{eq:eq_qp_density} predicts, that is evidence for nonequilibrium generation: stray photons, cosmic/radiation events, phonon bursts, substrate heating, imperfect shielding, or other environmental couplings.
+\end{physicsbox}
+
+\section{Reduced quasiparticle transport equation}
+The first FEM-ready quasiparticle model is a diffusion-reaction-trapping equation:
+\begin{equation}
+\frac{\partial n_{\qp}}{\partial t}
+=\nabla\cdot\left(D_{\qp}\nabla n_{\qp}\right)
+-R\left(n_{\qp}^2-\left(n_{\qp}^{\mathrm{eq}}\right)^2\right)
+-\Gamma_{\mathrm{trap}}(\rvec)n_{\qp}
++S_{\qp}(\rvec,t).
+\label{eq:qp_transport}
+\end{equation}
+Each term has a distinct physical meaning:
+\begin{itemize}[leftmargin=1.6em]
+    \item $\nabla\cdot(D_{\qp}\nabla n_{\qp})$ spreads quasiparticles spatially.
+    \item $R(n_{\qp}^2-(n_{\qp}^{\mathrm{eq}})^2)$ drives recombination toward equilibrium. The quadratic dependence appears because recombination requires two quasiparticles.
+    \item $\Gamma_{\mathrm{trap}}(\rvec)n_{\qp}$ removes quasiparticles in trap regions.
+    \item $S_{\qp}(\rvec,t)$ generates quasiparticles from deposited energy or nonequilibrium excitation.
+\end{itemize}
+
+This is the central equation for Module 2 and Module 3. It is intentionally simpler than a full kinetic equation, but it is ideal for geometry-level trap studies.
+
+\section{Where the recombination term comes from}
+Quasiparticle recombination is a two-body process. If $n_{\qp}$ is the density of quasiparticles, then the probability of finding two quasiparticles in the same effective interaction volume scales as $n_{\qp}^2$. Therefore the simplest recombination law is
+\begin{equation}
+\left.\frac{\partial n_{\qp}}{\partial t}\right|_{\mathrm{rec}}=-R n_{\qp}^2.
+\end{equation}
+However, if the material is in thermal equilibrium at temperature $T$, the density should not decay to zero; it should decay to $n_{\qp}^{\mathrm{eq}}(T)$. A detailed-balance-compatible reduced form is therefore
+\begin{equation}
+\left.\frac{\partial n_{\qp}}{\partial t}\right|_{\mathrm{rec}}=-R\left(n_{\qp}^2-\left(n_{\qp}^{\mathrm{eq}}\right)^2\right).
+\end{equation}
+If $n_{\qp}>n_{\qp}^{\mathrm{eq}}$, the term is negative and recombination dominates. If $n_{\qp}<n_{\qp}^{\mathrm{eq}}$, the term is positive, representing thermal generation toward equilibrium.
+
+\section{Trap term and physical meaning}
+A normal-metal quasiparticle trap is represented by a spatially localized removal rate $\Gamma_{\mathrm{trap}}(\rvec)$. In the simplest model,
+\begin{equation}
+\Gamma_{\mathrm{trap}}(\rvec)=
+\begin{cases}
+\Gamma_0, & \rvec\in\Omega_{\mathrm{trap}},\\
+0, & \rvec\notin\Omega_{\mathrm{trap}}.
+\end{cases}
+\end{equation}
+Then the trap contribution is
+\begin{equation}
+\left.\frac{\partial n_{\qp}}{\partial t}\right|_{\mathrm{trap}}=-\Gamma_{\mathrm{trap}}(\rvec)n_{\qp}.
+\end{equation}
+This says that the local density decays exponentially in a trap region if diffusion and sources are absent.
+
+A more realistic model would make $\Gamma_{\mathrm{trap}}$ depend on interface transparency, inverse proximity effects, material gap mismatch, and phonon bottleneck physics. Those details belong to a later extension. The first implementation uses $\Gamma_{\mathrm{trap}}$ as an effective design parameter.
+
+\section{Thermal material coefficients below $T_c$}
+Superconductivity changes thermal coefficients because electronic excitations are gapped. A reduced implementation can use the following modeling hierarchy:
+\begin{enumerate}[leftmargin=1.6em]
+    \item Use measured or literature values when available.
+    \item If unavailable, use normal-state properties above $T_c$.
+    \item Below $T_c$, suppress electronic contributions using an exponential factor controlled by $\Delta/\kB T$.
+    \item Keep phonon thermal transport in the substrate distinct from electronic/quasiparticle transport in the metal film.
+\end{enumerate}
+
+For example, an engineering-level suppression model for an electronic thermal conductivity contribution is
+\begin{equation}
+k_{e,s}(T)\approx k_{e,n}(T)\,\exp\left[-\frac{\Delta(T)}{\kB T}\right],
+\end{equation}
+where $k_{e,n}$ is the normal-state electronic contribution. This is not a substitute for detailed superconducting transport theory; it is a reduced model for first geometry sweeps.
+
+\section{Coupling heat and quasiparticles}
+A thermal model and a quasiparticle model can be coupled in several ways. The simplest one-way coupling is
+\begin{equation}
+T(\rvec,t)\longrightarrow \Delta(T),\quad n_{\qp}^{\mathrm{eq}}(T),\quad D_{\qp}(T),\quad R(T).
+\end{equation}
+The quasiparticle equation then evolves with coefficients determined by the temperature field.
+
+A stronger two-way coupling adds an energy source/sink to the thermal equation:
+\begin{equation}
+C\frac{\partial T}{\partial t}=\nabla\cdot(k\nabla T)+Q_{\mathrm{ext}}+Q_{\mathrm{rec}}-Q_{\mathrm{escape}},
+\end{equation}
+where $Q_{\mathrm{rec}}$ is energy released by recombination and $Q_{\mathrm{escape}}$ is energy removed by phonon escape or a heat sink. This is deferred until after the reduced transport model is stable.
+
+\section{Boundary and interface modeling}
+For the first FEM implementation, use no-flux boundary conditions for quasiparticles on insulating boundaries:
+\begin{equation}
+-D_{\qp}\nabla n_{\qp}\cdot\nvec=0.
+\end{equation}
+At trap surfaces or trap volumes, either a volume sink $\Gamma_{\mathrm{trap}}n_{\qp}$ or a Robin boundary condition can be used. A Robin trap boundary has the form
+\begin{equation}
+-D_{\qp}\nabla n_{\qp}\cdot\nvec = s_{\mathrm{trap}} n_{\qp},
+\end{equation}
+where $s_{\mathrm{trap}}$ is an interface capture velocity. The volume-sink model is easier to implement in the first 3D mesh, so that is the default.
+
+\section{Recommended first model}
+The first superconducting-temperature model should solve
+\begin{equation}
+\frac{\partial n_{\qp}}{\partial t}
+=\nabla\cdot\left(D_{\qp}\nabla n_{\qp}\right)
+-Rn_{\qp}^2
+-\Gamma_{\mathrm{trap}}(\rvec)n_{\qp}
++S_{\qp}(\rvec,t),
+\end{equation}
+with constant $D_{\qp}$ and $R$ inside the superconducting metal, a localized source near the junction or pad, and trap-rate regions defined by geometry tags. Once this works, temperature dependence can be activated through helper functions.
+
+\section{References}
+\begin{enumerate}[label={[\arabic*]}]
+\item J. Bardeen, L. N. Cooper, and J. R. Schrieffer, ``Theory of Superconductivity,'' \emph{Physical Review} \textbf{108}, 1175--1204 (1957).
+\item M. Tinkham, \emph{Introduction to Superconductivity}, 2nd ed., Dover (2004).
+\item J. Koch et al., ``Charge-insensitive qubit design derived from the Cooper pair box,'' \emph{Physical Review A} \textbf{76}, 042319 (2007).
+\item J. Aumentado, M. W. Keller, J. M. Martinis, and M. H. Devoret, ``Nonequilibrium quasiparticles and 2e periodicity in single-Cooper-pair transistors,'' \emph{Physical Review Letters} \textbf{92}, 066802 (2004).
+\end{enumerate}
+
+\end{document}

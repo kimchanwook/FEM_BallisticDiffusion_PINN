@@ -1,0 +1,188 @@
+
+\documentclass[11pt]{article}
+\input{../shared/project_style.tex}
+\rhead{Module 4}
+\begin{document}
+
+\DocTitle{Module 4: Physics-Informed Neural-Network Acceleration}{Mathematical structure of PINN and FEM-trained physics-informed surrogates}{Physics note for FEM\_BallisticDiffusion\_PINN}
+
+\begin{overviewbox}
+\textbf{Purpose.} This note defines the mathematical role of the neural network in the project. The first goal is not to replace FEM with a pure PINN. The first goal is to train a physics-informed surrogate on FEM data while penalizing violations of the governing PDEs, boundary conditions, initial conditions, positivity, and design constraints. This is the most realistic way to accelerate many geometry and material sweeps.
+\end{overviewbox}
+
+\ProjectTOC
+
+\SymbolsAcronymsSection
+\begin{symtable}
+PINN & Physics-informed neural network & Neural network trained with differential-equation residuals in the loss function. \\
+FEM & Finite element method & Numerical method used to generate high-fidelity training data and validation data. \\
+$\mathcal{N}_\theta$ & Neural network & Parameterized function with trainable weights $\theta$. \\
+$\theta$ & Network weights & Trainable parameters of the neural network. \\
+$\bm{p}$ & Design vector & Geometry and material parameters such as trap distance, trap size, and substrate material. \\
+$\rvec$ & Position vector & Spatial input to the network. \\
+$t$ & Time & Temporal input to the network. \\
+$T_\theta$ & Predicted temperature & Network output approximating FEM temperature. \\
+$n_\theta$ & Predicted quasiparticle density & Network output approximating FEM quasiparticle density. \\
+$\mathcal{R}_{\mathrm{PDE}}$ & PDE residual & Residual obtained by substituting network outputs into the governing equation. \\
+$\mathcal{L}$ & Loss function & Scalar objective minimized during training. \\
+$\lambda$ & Loss weight & Relative coefficient multiplying a loss term. \\
+AD & Automatic differentiation & Method for computing derivatives of network outputs with respect to inputs. \\
+\end{symtable}
+
+\section{Why not start with a pure PINN}
+A pure PINN represents the solution field directly with a neural network and trains it by minimizing PDE residuals and boundary/initial-condition errors. This is elegant, but for a three-dimensional, time-dependent, multiphysics geometry problem it can be harder and slower than FEM. Complex geometry, sharp material interfaces, high aspect-ratio thin films, and localized traps are all difficult for a pure PINN.
+
+Therefore the recommended first strategy is a hybrid:
+\begin{equation}
+\text{FEM solutions} + \text{PDE residual constraints} \longrightarrow \text{physics-informed surrogate}.
+\end{equation}
+This keeps FEM as the trusted high-fidelity solver while using neural networks to accelerate repeated design evaluation.
+
+\section{Surrogate input-output map}
+Let $\bm{p}$ denote a design vector. It may include
+\begin{equation}
+\bm{p}=\left[d_{\mathrm{trap}},L_{\mathrm{trap}},W_{\mathrm{trap}},\Gamma_{\mathrm{trap}},k_{\mathrm{sub}},D_{\qp},\ldots\right].
+\end{equation}
+The neural surrogate maps position, time, and design parameters to physical fields:
+\begin{equation}
+\mathcal{N}_\theta:(\rvec,t,\bm{p})\mapsto\left[T_\theta(\rvec,t;\bm{p}),\;n_\theta(\rvec,t;\bm{p})\right].
+\end{equation}
+For Module 1, the output may instead be the ballistic-diffusive medium energy variable $u_{m,\theta}$.
+
+\section{PDE residual for heat diffusion}
+For a baseline thermal equation
+\begin{equation}
+C\frac{\partial T}{\partial t}-\nabla\cdot(k\nabla T)-Q=0,
+\end{equation}
+the network residual is
+\begin{equation}
+\mathcal{R}_T(\rvec,t;\bm{p})
+=C\frac{\partial T_\theta}{\partial t}
+-\nabla\cdot(k\nabla T_\theta)-Q.
+\end{equation}
+The derivatives are computed by automatic differentiation when the geometry is represented continuously or by differentiable coordinate inputs.
+
+For material-discontinuous problems, caution is required: $k(\rvec)$ is discontinuous at interfaces, so strong-form derivatives can become numerically problematic. In those cases, PDE residual points should be sampled away from sharp interfaces, while interface conditions are handled through separate loss terms or FEM-supervised data.
+
+\section{PDE residual for quasiparticle transport}
+For the linearized quasiparticle equation
+\begin{equation}
+\frac{\partial n_{\qp}}{\partial t}-\nabla\cdot(D_{\qp}\nabla n_{\qp})+\Gamma n_{\qp}-S_{\qp}=0,
+\end{equation}
+the network residual is
+\begin{equation}
+\mathcal{R}_n(\rvec,t;\bm{p})
+=\frac{\partial n_\theta}{\partial t}
+-\nabla\cdot(D_{\qp}\nabla n_\theta)
++\Gamma n_\theta-S_{\qp}.
+\end{equation}
+For the nonlinear recombination model,
+\begin{equation}
+\mathcal{R}_n
+=\frac{\partial n_\theta}{\partial t}
+-\nabla\cdot(D_{\qp}\nabla n_\theta)
++R\left(n_\theta^2-(n_{\qp}^{\mathrm{eq}})^2\right)
++\Gamma_{\mathrm{trap}}n_\theta-S_{\qp}.
+\end{equation}
+
+\section{Loss function}
+The total loss should combine data, PDE, boundary, initial, and physics constraint terms:
+\begin{equation}
+\mathcal{L}
+=\mathcal{L}_{\mathrm{FEM}}
++\lambda_{\mathrm{PDE}}\mathcal{L}_{\mathrm{PDE}}
++\lambda_{\mathrm{BC}}\mathcal{L}_{\mathrm{BC}}
++\lambda_{\mathrm{IC}}\mathcal{L}_{\mathrm{IC}}
++\lambda_{\mathrm{phys}}\mathcal{L}_{\mathrm{phys}}.
+\end{equation}
+The FEM data loss is
+\begin{equation}
+\mathcal{L}_{\mathrm{FEM}}=\frac{1}{N_d}\sum_{i=1}^{N_d}
+\left\|\mathcal{N}_\theta(\rvec_i,t_i,\bm{p}_i)-\bm{y}^{\mathrm{FEM}}_i\right\|_2^2.
+\end{equation}
+The PDE loss is
+\begin{equation}
+\mathcal{L}_{\mathrm{PDE}}=\frac{1}{N_r}\sum_{j=1}^{N_r}
+\left(\left|\mathcal{R}_T(\rvec_j,t_j;\bm{p}_j)\right|^2+\beta_n\left|\mathcal{R}_n(\rvec_j,t_j;\bm{p}_j)\right|^2\right).
+\end{equation}
+
+\section{Boundary and initial condition losses}
+For a no-flux quasiparticle boundary condition,
+\begin{equation}
+-D_{\qp}\nabla n\cdot\nvec=0,
+\end{equation}
+the boundary residual is
+\begin{equation}
+\mathcal{R}_{\mathrm{BC},n}=D_{\qp}\nabla n_\theta\cdot\nvec.
+\end{equation}
+For a trap Robin boundary condition,
+\begin{equation}
+-D_{\qp}\nabla n\cdot\nvec=s_{\mathrm{trap}}n,
+\end{equation}
+the residual becomes
+\begin{equation}
+\mathcal{R}_{\mathrm{BC},n}=D_{\qp}\nabla n_\theta\cdot\nvec+s_{\mathrm{trap}}n_\theta.
+\end{equation}
+Initial condition loss enforces
+\begin{equation}
+T_\theta(\rvec,0;\bm{p})=T_0(\rvec),\qquad
+n_\theta(\rvec,0;\bm{p})=n_0(\rvec).
+\end{equation}
+
+\section{Physics constraints}
+Some constraints are not PDEs but are still essential:
+\begin{enumerate}[leftmargin=1.6em]
+    \item quasiparticle density must be nonnegative,
+    \item temperature must stay physically reasonable,
+    \item energy should not grow without a source,
+    \item trap removal should not create quasiparticles,
+    \item predicted design metrics should be monotonic in simple limiting tests when the physics demands it.
+\end{enumerate}
+A positivity penalty can be written as
+\begin{equation}
+\mathcal{L}_{\mathrm{pos}}=\frac{1}{N}\sum_{i=1}^{N}\left[\max(0,-n_\theta(\rvec_i,t_i;\bm{p}_i))\right]^2.
+\end{equation}
+A stronger method is to parameterize the density output as
+\begin{equation}
+n_\theta=\mathrm{softplus}(z_\theta),
+\end{equation}
+where $z_\theta$ is an unconstrained network output.
+
+\section{Acceleration target}
+The useful output of the surrogate is often not the entire field but a design metric such as
+\begin{equation}
+J_{\JJ}(\bm{p})=\int_0^{t_f}\int_{\Omega_{\JJ}}n_\theta(\rvec,t;\bm{p})\,\dd V\,\dd t.
+\end{equation}
+The trained surrogate can evaluate $J_{\JJ}(\bm{p})$ much faster than running a new FEM simulation for every design. This enables parameter sweeps, sensitivity analysis, and eventually optimization.
+
+\section{Training workflow}
+The recommended workflow is:
+\begin{enumerate}[leftmargin=1.6em]
+    \item choose a limited design space, such as trap distance and trap strength,
+    \item run FEM for a sparse design set,
+    \item sample field values from the FEM solutions,
+    \item train the neural surrogate with both FEM data loss and PDE residual loss,
+    \item validate on held-out FEM simulations,
+    \item add new FEM simulations where the surrogate error is largest,
+    \item repeat until design-metric error is acceptable.
+\end{enumerate}
+
+\section{Failure modes}
+The network can fail in ways that look deceptively good. Common failure modes include:
+\begin{itemize}[leftmargin=1.6em]
+    \item low average field error but bad error near the junction-sensitive region,
+    \item good interpolation but poor extrapolation to new trap geometries,
+    \item PDE residual minimized in smooth regions while interface physics is wrong,
+    \item output smoothing that washes out localized sources or traps,
+    \item loss imbalance where the PDE residual dominates and the model ignores FEM data, or vice versa.
+\end{itemize}
+Therefore validation should prioritize $J_{\JJ}$, source-region behavior, trap-region behavior, and conservation diagnostics, not only global mean-squared error.
+
+\section{References}
+\begin{enumerate}[label={[\arabic*]}]
+\item M. Raissi, P. Perdikaris, and G. E. Karniadakis, ``Physics-informed neural networks,'' \emph{Journal of Computational Physics} \textbf{378}, 686--707 (2019).
+\item G. E. Karniadakis et al., ``Physics-informed machine learning,'' \emph{Nature Reviews Physics} \textbf{3}, 422--440 (2021).
+\item S. Cuomo et al., ``Scientific machine learning through physics-informed neural networks,'' \emph{Journal of Scientific Computing} \textbf{92}, 88 (2022).
+\end{enumerate}
+
+\end{document}

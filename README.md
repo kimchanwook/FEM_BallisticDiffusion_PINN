@@ -1,2 +1,29 @@
 # FEM_BallisticDiffusion_PINN
-A MATLAB FEM framework for modeling ballistic-diffusive heat transport and quasiparticle poisoning in superconducting qubit structures. The project combines textbook-style physics derivations, 3D qubit geometry, cryogenic material physics, trap/heat-sink design studies, and Physics-Inspired Neural Network (PINN) for simulation acceleration.
+
+MATLAB project for finite-element modeling of ballistic-diffusive heat transport and quasiparticle diffusion/trapping in a planar superconducting transmon-like geometry, with a physics-informed neural-network surrogate layer for later acceleration.
+
+## Project logic
+
+1. Validate Gang Chen-style ballistic-diffusive heat conduction on a 1D thin-film problem.
+2. Introduce cryogenic superconducting material physics: BCS gap, quasiparticles, diffusion, recombination, and traps.
+3. Hard-code a 3D planar transmon geometry in MATLAB using cuboid regions and a tensor-product hexahedral FEM mesh.
+4. Use FEM simulations to generate data for a physics-informed surrogate/PINN.
+5. Document future nonequilibrium electron-phonon and photon physics.
+
+## Main entry points
+
+```matlab
+matlab/setup_project_paths
+matlab/main_module1_bd_1d_validation
+matlab/main_module3_transmon_3d_fem
+matlab/cases/case_trap_distance_sweep
+matlab/main_module4_train_pinn_surrogate
+```
+
+## Documentation
+
+The main roadmap is `project_plan.pdf`. Module physics notes live in `docs/physics_notes/`.
+
+## Notes on the Josephson junction representation
+
+The Josephson tunnel barrier is not directly meshed at nanometer thickness in this first build. It is represented as an effective junction-sensitive volume and source/metric region. This avoids an extreme multiscale mesh while preserving the design question: how do traps, pads, substrate, and heat sinks affect quasiparticle density near the junction?

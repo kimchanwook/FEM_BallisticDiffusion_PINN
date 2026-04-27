@@ -1,0 +1,124 @@
+
+\documentclass[11pt]{article}
+\input{docs/shared/project_style.tex}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\rhead{Project Plan}
+\begin{document}
+
+\DocTitle{Project Plan}{FEM\_BallisticDiffusion\_PINN}{Single living roadmap for ballistic-diffusive heat transport, superconducting-qubit quasiparticles, FEM implementation, and PINN acceleration}
+
+\begin{overviewbox}
+\textbf{Purpose.} This document is the top-level roadmap for \textbf{FEM\_BallisticDiffusion\_PINN}. The project builds a MATLAB-based finite-element simulator for nanoscale and microscale heat/quasiparticle transport in a superconducting-qubit-like geometry, then develops a physics-informed neural-network surrogate to accelerate geometry and material sweeps. The long-term design objective is to compare trap, heat-sink, pad, and material choices by how effectively they reduce quasiparticle density near the Josephson-junction-sensitive region.
+\end{overviewbox}
+
+\ProjectTOC
+
+\begin{notebox}
+\textbf{Current architecture revision.} This first project build uses a planar transmon geometry as the baseline physical qubit structure. The Josephson tunnel barrier is not directly meshed at nanometer thickness; it is represented by an effective junction-sensitive volume and source/sink terms. This is intentional because the substrate and capacitor pads are millimeter-to-micrometer scale, while the oxide barrier is nanometer scale. Directly resolving all scales in one first-pass 3D mesh would be inefficient and physically unnecessary for the first thermal/quasiparticle transport study.
+\end{notebox}
+
+\section{Project objective}
+The project objective is to build a physics-first computational framework for studying how geometry, material choice, and engineered sinks influence quasiparticle poisoning in superconducting qubit structures. The project is not a full quantum-circuit simulator. Instead, it focuses on transport physics: how thermal energy, phonons, quasiparticles, and engineered traps move or remove nonequilibrium energy from regions that matter for qubit operation.
+
+The intended physics chain is:
+\begin{enumerate}[leftmargin=1.6em]
+    \item energy is deposited in a nanoscale or microscale region by a thermal, phonon, photon, or future radiation-like source,
+    \item thermal carriers propagate in a regime that may not be purely Fourier-diffusive,
+    \item low-temperature superconducting material properties modify heat capacity, thermal conductivity, quasiparticle density, diffusion, recombination, and trapping,
+    \item a realistic planar transmon geometry defines the sensitive junction region and possible locations for traps or heat sinks,
+    \item finite-element simulations generate high-fidelity solutions for selected designs,
+    \item a physics-informed neural-network surrogate learns the design-to-solution map so that many geometry and material designs can be swept more rapidly.
+\end{enumerate}
+
+\section{Module roadmap}
+\begin{longtable}{p{0.08\linewidth} p{0.30\linewidth} p{0.52\linewidth}}
+\toprule
+\textbf{No.} & \textbf{Module} & \textbf{Purpose}\\
+\midrule
+1 & Ballistic-diffusive heat conduction at room temperature & Derive and implement the ballistic-diffusive heat-conduction equation from the Boltzmann transport equation under the relaxation-time approximation. The current priority is physics understanding: the note includes a detailed thin-film benchmark derivation, nondimensional form, finite-arrival-time ballistic flux, and slide-ready summaries.\\
+2 & Low-temperature superconducting material physics & Explain how the physics changes when the device is cooled below the superconducting transition temperature. Introduce the Bardeen-Cooper-Schrieffer energy gap, equilibrium and nonequilibrium quasiparticle density, superconducting heat capacity, quasiparticle diffusion, recombination, and trapping.\\
+3 & Three-dimensional planar transmon geometry and FEM implementation & Hard-code a 3D planar transmon-like geometry in MATLAB, including substrate, capacitor pads, effective Josephson-junction region, normal-metal quasiparticle traps, and optional heat-sink patches. Assemble scalar thermal and quasiparticle diffusion-reaction FEM systems.\\
+4 & Physics-informed neural-network acceleration & Build a physics-informed surrogate that is trained from FEM data and constrained by PDE residuals, boundary conditions, initial conditions, and positivity/energy constraints. Use it to accelerate geometry, trap, and material sweeps.\\
+5 & Future nonequilibrium electron-phonon and photon physics & Document future extensions: photon absorption, pair breaking, hot electron relaxation, high-energy phonon generation, quasiparticle recombination, phonon escape, and coupled Rothwarf-Taylor-type nonequilibrium dynamics. No code is required in the first build.\\
+\bottomrule
+\end{longtable}
+
+\section{Baseline qubit geometry}
+The baseline geometry is a planar transmon fabricated as thin superconducting metal on a dielectric substrate. The model resolves the substrate, metal pads, trap regions, and effective junction-sensitive volume. It does not attempt to resolve the oxide barrier thickness.
+
+\begin{longtable}{p{0.22\linewidth} p{0.22\linewidth} p{0.22\linewidth} p{0.25\linewidth}}
+\toprule
+\textbf{Component} & \textbf{Baseline material} & \textbf{Baseline dimensions} & \textbf{Role}\\
+\midrule
+Substrate & Sapphire or high-resistivity silicon & $3~\mathrm{mm}\times 3~\mathrm{mm}\times 0.5~\mathrm{mm}$ & Main phonon and thermal body.\\
+Left capacitor pad & Al, Ta, or Nb film & $600~\mu\mathrm{m}\times 300~\mu\mathrm{m}\times 100~\mathrm{nm}$ & One side of the transmon shunt capacitance and a superconducting transport region.\\
+Right capacitor pad & Al, Ta, or Nb film & $600~\mu\mathrm{m}\times 300~\mu\mathrm{m}\times 100~\mathrm{nm}$ & Opposite shunt pad and superconducting transport region.\\
+Pad gap & Exposed substrate/vacuum & $40$--$80~\mu\mathrm{m}$ & Capacitive electric-field region between pads.\\
+Junction leads & Al & $5$--$10~\mu\mathrm{m}$ wide, $20$--$60~\mu\mathrm{m}$ long & Connect pads to the effective junction-sensitive volume.\\
+Josephson junction region & Effective Al/AlOx/Al region & $0.2$--$1~\mu\mathrm{m}$ lateral effective patch & Region in which quasiparticle density is most damaging.\\
+Normal-metal traps & Cu, Au, or Pd & $10~\mu\mathrm{m}\times 100~\mu\mathrm{m}\times 50$--$100~\mathrm{nm}$ & Engineered quasiparticle sinks.\\
+Backside heat sink & Cu, Au, or thick normal metal & $200$--$500~\mu\mathrm{m}$ lateral patch & Optional phonon/thermal sink on the substrate backside.\\
+\bottomrule
+\end{longtable}
+
+\section{Run-order workflow}
+\begin{enumerate}[leftmargin=1.6em]
+    \item Compile and read the project plan and all physics notes.
+    \item Run \texttt{matlab/main\_module1\_bd\_1d\_validation.m} to validate the ballistic-diffusive thin-film model.
+    \item Run \texttt{matlab/main\_module3\_transmon\_3d\_fem.m} to build the baseline geometry, assemble the 3D FEM matrices, and solve an initial quasiparticle diffusion-reaction problem.
+    \item Run \texttt{matlab/cases/case\_trap\_distance\_sweep.m} to compare no-trap, near-trap, and far-trap designs.
+    \item Use \texttt{matlab/main\_module4\_train\_pinn\_surrogate.m} only after enough FEM cases have been generated to train a surrogate meaningfully.
+\end{enumerate}
+
+\section{Design metric}
+The first optimization metric should target the region that is physically most sensitive, not merely the average chip temperature. A useful first metric is
+\begin{equation}
+J_{\JJ}=\int_0^{t_f}\int_{\Omega_{\JJ}} n_{\qp}(\rvec,t)\,\dd V\,\dd t,
+\end{equation}
+where $n_{\qp}(\rvec,t)$ is quasiparticle density and $\Omega_{\JJ}$ is the effective Josephson-junction-sensitive region. Lower $J_{\JJ}$ means fewer quasiparticles are present near the active weak link over the simulation window.
+
+A geometry-regularized design objective can then be written as
+\begin{equation}
+J = J_{\JJ}+\lambda_V V_{\mathrm{trap}}+\lambda_G P_{\mathrm{geometry}},
+\end{equation}
+where $V_{\mathrm{trap}}$ penalizes excessive normal-metal trap volume and $P_{\mathrm{geometry}}$ penalizes fabrication-unfriendly geometries.
+
+\section{File map}
+{\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{longtable}{>{\RaggedRight\arraybackslash}p{0.42\linewidth} >{\RaggedRight\arraybackslash}p{0.48\linewidth}}
+\toprule
+\textbf{Path} & \textbf{Purpose}\\
+\midrule
+\texttt{project\_plan.tex/pdf} & Single living roadmap for project architecture.\\
+\texttt{docs/shared/project\_style.tex} & Shared LaTeX style file inherited from the RadiationEffects project style.\\
+\texttt{docs/physics\_notes/} & Textbook-style physics notes with purpose box, table of contents, symbols/acronyms section, derivations, and references.\\
+\texttt{matlab/src/geometry/} & Geometry parameters and hard-coded cuboid representation of the planar transmon.\\
+\texttt{matlab/src/materials/} & Material property models for substrate, superconducting films, and traps.\\
+\texttt{matlab/src/module1\_bd/} & Ballistic-diffusive thin-film validation code.\\
+\texttt{matlab/src/module2\_superconducting/} & BCS gap, equilibrium quasiparticle density, diffusivity, recombination, and trap-rate helper functions.\\
+\texttt{matlab/src/module3\_fem/} & 3D scalar FEM assembly for thermal and quasiparticle diffusion-reaction equations.\\
+\texttt{matlab/src/module4\_pinn/} & PINN/surrogate model definitions, loss functions, and training skeleton.\\
+\texttt{outputs/} & Generated figures, data, and case summaries.\\
+\bottomrule
+\end{longtable}
+}
+
+\section{Implementation philosophy}
+The project should remain physics-interpretable. Every MATLAB routine should map to a documented equation or modeling assumption in the physics notes. The first build is intentionally conservative:
+\begin{itemize}[leftmargin=1.6em]
+    \item validate the reduced ballistic-diffusive equation before using it in complex geometry,
+    \item treat the Josephson junction as an effective sensitive region rather than trying to mesh a nanometer oxide,
+    \item use FEM data plus PDE residuals for the first PINN rather than a pure PINN trained without high-fidelity data,
+    \item make all geometry and material parameters explicit and sweepable.
+\end{itemize}
+
+\section{References}
+\begin{enumerate}[label={[\arabic*]}]
+    \item G. Chen, ``Ballistic-Diffusive Heat-Conduction Equations,'' \emph{Physical Review Letters} \textbf{86}, 2297--2300 (2001).
+    \item G. Chen, ``Ballistic-Diffusive Equations for Transient Heat Conduction From Nano to Macroscales,'' \emph{Journal of Heat Transfer} \textbf{124}, 320--328 (2002).
+    \item J. Bardeen, L. N. Cooper, and J. R. Schrieffer, ``Theory of Superconductivity,'' \emph{Physical Review} \textbf{108}, 1175--1204 (1957).
+    \item J. Koch et al., ``Charge-insensitive qubit design derived from the Cooper pair box,'' \emph{Physical Review A} \textbf{76}, 042319 (2007).
+\end{enumerate}
+
+\end{document}

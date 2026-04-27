@@ -1,0 +1,333 @@
+\documentclass[11pt]{article}
+\input{../shared/project_style.tex}
+\rhead{Module 1 Slides}
+\begin{document}
+
+\DocTitle{Module 1 Slide Outline: Ballistic-Diffusive Heat Conduction}{Lecture structure for converting the Module 1 physics note into presentation slides}{Slide-planning document for FEM\_BallisticDiffusion\_PINN}
+
+\begin{overviewbox}
+\textbf{Purpose.} This document converts \texttt{module1\_ballistic\_diffusive\_heat\_conduction.pdf} into a physics-lecture-style slide sequence. It is not the final PowerPoint deck. Instead, it defines the conceptual order, governing equations, figure ideas, and speaker emphasis for each slide. The goal is to make the eventual presentation follow the same logic as the detailed Module 1 physics note: start from microscopic heat carriers, derive the Boltzmann transport picture, explain the limits of Fourier and Cattaneo models, introduce the ballistic-diffusive split, and end with the thin-film validation problem that should be implemented first.
+\end{overviewbox}
+
+\ProjectTOC
+
+\SymbolsAcronymsSection
+\begin{symtable}
+BD & Ballistic-diffusive & Reduced heat-transport model that treats boundary-originating carriers ballistically and internally scattered carriers diffusively. \\
+BTE & Boltzmann transport equation & Microscopic transport equation for the carrier distribution function. \\
+FEM & Finite element method & Numerical discretization method planned for the project implementation. \\
+PINN & Physics-informed neural network & Neural-network surrogate whose loss includes physical residuals, boundary conditions, and initial conditions. \\
+RTA & Relaxation-time approximation & Collision approximation in which the carrier distribution relaxes toward local equilibrium over a characteristic time. \\
+P1 approximation & First-order spherical harmonics closure & Angular closure that keeps an isotropic term and a first directional correction. \\
+\(C\) & Volumetric heat capacity & Energy storage per unit volume per unit temperature. \\
+\(f\) & Distribution function & Microscopic carrier occupation in phase space. \\
+\(f_0\) & Local-equilibrium distribution & Equilibrium distribution toward which scattering relaxes the system. \\
+\(I_\omega\) & Spectral intensity & Directional representation of carrier energy transport at angular frequency \(\omega\). \\
+\(I_{b\omega}\) & Ballistic intensity & Boundary-originating component of the intensity. \\
+\(I_{m\omega}\) & Medium/scattered intensity & Internally scattered or emitted component of the intensity. \\
+\(I_{w\omega}\) & Wall intensity & Intensity emitted or reflected from a boundary into the material. \\
+\(J_{0\omega}\) & Isotropic coefficient & Zeroth angular moment of the medium/scattered intensity. \\
+\(\bm{J}_{1\omega}\) & First angular coefficient & First anisotropic angular moment of the medium/scattered intensity. \\
+\(k\) & Thermal conductivity & Diffusive thermal conductivity. \\
+\(L\) & Film thickness or device length & Characteristic length scale used to define the Knudsen number. \\
+\(\mfp\) & Mean free path & Average distance traveled by a carrier between scattering events. \\
+\(\mathrm{Kn}\) & Knudsen number & Ratio \(\mathrm{Kn}=\mfp/L\), the organizing nondimensional parameter for transport regime. \\
+\(\mu\) & Direction cosine & Cosine of the carrier propagation angle relative to the 1D transport direction. \\
+\(\mu_t\) & Finite-arrival angular cutoff & Minimum direction cosine for a boundary-emitted carrier to reach a position by time \(t^*\). \\
+\(\qvec\) & Heat flux & Energy transported per unit area per unit time. \\
+\(\qvec_b\) & Ballistic heat flux & Heat flux carried by boundary-originating carriers. \\
+\(q_b^*\) & Nondimensional ballistic flux & Normalized ballistic heat flux used in the thin-film benchmark. \\
+\(T\) & Temperature or equivalent temperature & True thermodynamic temperature in local equilibrium; equivalent internal-energy temperature outside local equilibrium. \\
+\(t\) & Time & Physical time coordinate. \\
+\(t^*\) & Nondimensional time & Time normalized by the relaxation time, \(t^*=t/\tau\). \\
+\(u\) & Internal energy density & Carrier energy per unit volume. \\
+\(u_b\) & Ballistic internal energy density & Energy density associated with boundary-originating carriers. \\
+\(u_m\) & Medium/scattered internal energy density & Energy density associated with internally scattered carriers. \\
+\(\eta\) & Nondimensional coordinate & Coordinate across the thin film, \(\eta=x/L\). \\
+\(\tau\) & Relaxation time & Characteristic scattering time. \\
+\(\theta_m\) & Nondimensional medium energy & Normalized medium/scattered energy variable used in the thin-film benchmark. \\
+\(\omega\) & Angular frequency & Frequency variable for carrier modes. \\
+\end{symtable}
+
+\section{How to use this slide outline}
+This outline is intended to become a physics-lecture-style presentation. Each slide entry gives five pieces of information:
+\begin{enumerate}[leftmargin=1.6em]
+    \item the central question the slide should answer,
+    \item the core message the audience should remember,
+    \item the equation or equations that should be shown,
+    \item the figure or diagram that should be drawn,
+    \item the speaker emphasis that should guide the verbal explanation.
+\end{enumerate}
+The final PowerPoint should not simply copy all text from this document. The slide should be visually sparse, while the speaker notes should carry the derivation and physical explanation.
+
+\begin{notebox}
+\textbf{Presentation principle.} Module 1 should not begin with the final ballistic-diffusive equation. It should begin with the physical failure of ordinary Fourier conduction at small length and time scales. The audience should feel why a microscopic carrier picture is needed before the final equation appears.
+\end{notebox}
+
+\section{Slide 1: Why ordinary heat conduction breaks down}
+\begin{physicsbox}
+\textbf{Main question.} When does Fourier heat conduction stop being physically reliable?
+\end{physicsbox}
+
+\textbf{Core message.} Fourier law is local. Nanoscale and ultrafast heat transport can be nonlocal because heat carriers travel finite distances before scattering.
+
+\textbf{Equation to show:}
+\begin{equation*}
+\qvec=-k\nabla T.
+\end{equation*}
+
+\textbf{Figure idea.} Draw a device length \(L\) compared with a carrier mean free path \(\mfp\). Show two limits: \(\mfp\ll L\) and \(\mfp\sim L\).
+
+\textbf{Speaker emphasis.} The failure is not that Fourier law is useless. The failure is that its assumptions break when the carrier mean free path and the device length are comparable.
+
+\section{Slide 2: Heat carriers, scattering time, and mean free path}
+\begin{physicsbox}
+\textbf{Main question.} What is actually moving the energy?
+\end{physicsbox}
+
+\textbf{Core message.} Heat is transported by microscopic carriers such as phonons, electrons, or molecules. A carrier moves with group velocity \(v\), scatters after a characteristic time \(\tau\), and travels a mean free path \(\mfp\).
+
+\textbf{Equations to show:}
+\begin{align*}
+\mfp &= v\tau,\\
+\mathrm{Kn} &= \frac{\mfp}{L}.
+\end{align*}
+
+\textbf{Figure idea.} Show carrier trajectories with several scattering events in a large device and nearly collisionless trajectories in a small device.
+
+\textbf{Speaker emphasis.} The Knudsen number is the organizing parameter for Module 1. It tells whether the transport problem is mostly diffusive, quasi-ballistic, or strongly ballistic.
+
+\section{Slide 3: Temperature is subtle outside local equilibrium}
+\begin{physicsbox}
+\textbf{Main question.} Can every small region be assigned a true temperature?
+\end{physicsbox}
+
+\textbf{Core message.} True thermodynamic temperature requires local equilibrium. In a ballistic or quasi-ballistic regime, the carrier distribution can be directional and nonequilibrium. The useful quantity is often an equivalent internal-energy temperature.
+
+\textbf{Equation to show:}
+\begin{equation*}
+\Delta u=C\Delta T.
+\end{equation*}
+
+\textbf{Figure idea.} Compare an isotropic equilibrium carrier distribution against a directional nonequilibrium distribution near a boundary.
+
+\textbf{Speaker emphasis.} This point matters later because the boundary-emitted temperature is not necessarily the same as the equivalent temperature inside the film.
+
+\section{Slide 4: Distribution function and Boltzmann transport equation}
+\begin{physicsbox}
+\textbf{Main question.} What is the microscopic equation behind the model?
+\end{physicsbox}
+
+\textbf{Core message.} Instead of starting from temperature, start from the carrier distribution function \(f(t,\rvec,\bm{k})\). The Boltzmann transport equation tracks streaming and scattering.
+
+\textbf{Equation to show:}
+\begin{equation*}
+\frac{\partial f}{\partial t}+\bm{v}\cdot\nabla_{\rvec} f=-\frac{f-f_0}{\tau}.
+\end{equation*}
+
+\textbf{Figure idea.} Draw a carrier packet streaming through space while collisions relax the local distribution toward \(f_0\).
+
+\textbf{Speaker emphasis.} The relaxation-time approximation compresses complicated collision physics into one characteristic relaxation time.
+
+\section{Slide 5: Fourier conduction as the diffusive limit}
+\begin{physicsbox}
+\textbf{Main question.} How does the familiar heat equation emerge?
+\end{physicsbox}
+
+\textbf{Core message.} When the mean free path is much smaller than the device size, carriers scatter many times and lose directional memory. The flux becomes locally proportional to the temperature gradient.
+
+\textbf{Equations to show:}
+\begin{align*}
+\qvec&=-k\nabla T,\\
+C\frac{\partial T}{\partial t}&=\nabla\cdot(k\nabla T)+\dot{q}_e.
+\end{align*}
+
+\textbf{Figure idea.} Draw many randomizing scattering events over a length \(L\), producing a nearly isotropic local distribution.
+
+\textbf{Speaker emphasis.} Fourier law is a valid limit, not a fundamental microscopic law.
+
+\section{Slide 6: Why Fourier fails at small scales}
+\begin{physicsbox}
+\textbf{Main question.} What exactly goes wrong mathematically and physically?
+\end{physicsbox}
+
+\textbf{Core message.} The parabolic heat equation predicts an instantaneous nonzero response everywhere. Physically, heat carriers move at finite speed.
+
+\textbf{Equation to show:}
+\begin{equation*}
+G(x,t)=\frac{1}{\sqrt{4\pi\alpha t}}\exp\left(-\frac{x^2}{4\alpha t}\right).
+\end{equation*}
+
+\textbf{Figure idea.} Draw Gaussian heat-kernel tails extending everywhere for any \(t>0\), even very far from the heat source.
+
+\textbf{Speaker emphasis.} Infinite propagation speed is negligible at macroscale but can dominate early-time nanoscale predictions.
+
+\section{Slide 7: Cattaneo fixes speed but not ballistic memory}
+\begin{physicsbox}
+\textbf{Main question.} Does adding a flux relaxation time solve the problem?
+\end{physicsbox}
+
+\textbf{Core message.} Cattaneo conduction introduces finite flux response time, but it still treats all heat flux as a single local continuum field. It does not represent boundary-originating ballistic particles.
+
+\textbf{Equation to show:}
+\begin{equation*}
+\tau\frac{\partial \qvec}{\partial t}+\qvec=-k\nabla T.
+\end{equation*}
+
+\textbf{Figure idea.} Compare a smooth ballistic-arrival picture with a continuum thermal-wave picture.
+
+\textbf{Speaker emphasis.} Finite propagation speed is necessary but not sufficient. A model can avoid infinite speed and still miss nonlocal boundary memory.
+
+\section{Slide 8: Ballistic-diffusive split}
+\begin{physicsbox}
+\textbf{Main question.} How do we keep the essential Boltzmann physics without solving full phase space?
+\end{physicsbox}
+
+\textbf{Core message.} Split the carrier intensity into a boundary-originating ballistic component and an internally scattered medium component.
+
+\textbf{Equation to show:}
+\begin{equation*}
+I_\omega=I_{b\omega}+I_{m\omega}.
+\end{equation*}
+
+\textbf{Figure idea.} Draw rays from the boundary for \(I_{b\omega}\), and a scattered, nearly isotropic population inside the material for \(I_{m\omega}\).
+
+\textbf{Speaker emphasis.} This is the central modeling idea of Gang Chen's ballistic-diffusive equation.
+
+\section{Slide 9: Ballistic component by characteristics}
+\begin{physicsbox}
+\textbf{Main question.} How does the ballistic component remember the boundary?
+\end{physicsbox}
+
+\textbf{Core message.} Boundary-originating carriers arrive at an interior point after a finite flight time and are attenuated by scattering probability.
+
+\textbf{Equation to show:}
+\begin{equation*}
+I_{b\omega}(t,\rvec,\hat{\Omega})
+=I_{w\omega}\left(t-\frac{s-s_0}{v},\rvec-(s-s_0)\hat{\Omega}\right)
+\exp\left[-\int_{s_0}^{s}\frac{ds'}{v\tau_\omega}\right].
+\end{equation*}
+
+\textbf{Figure idea.} Draw a ray from the boundary to an interior point with travel distance and retarded time annotated.
+
+\textbf{Speaker emphasis.} This is the mathematical expression of nonlocal boundary memory. The interior state depends on what was emitted from the boundary at an earlier time.
+
+\section{Slide 10: Medium component by P1/diffusion closure}
+\begin{physicsbox}
+\textbf{Main question.} How is the scattered population simplified?
+\end{physicsbox}
+
+\textbf{Core message.} The internally scattered population is more isotropic than the ballistic population. Keep the isotropic term and first anisotropic correction.
+
+\textbf{Equation to show:}
+\begin{equation*}
+I_{m\omega}=J_{0\omega}+\bm{J}_{1\omega}\cdot\hat{\Omega}.
+\end{equation*}
+
+\textbf{Figure idea.} Draw an angular distribution becoming nearly isotropic after scattering.
+
+\textbf{Speaker emphasis.} This is the approximation that makes the model FEM-friendly. Instead of carrying the full angular dependence, the model evolves spatial fields.
+
+\section{Slide 11: Final ballistic-diffusive PDE}
+\begin{physicsbox}
+\textbf{Main question.} What equation will be implemented numerically?
+\end{physicsbox}
+
+\textbf{Core message.} The scattered medium energy satisfies a Cattaneo-like PDE, but it is forced by the divergence of the ballistic flux.
+
+\textbf{Equation to show:}
+\begin{equation*}
+\tau\frac{\partial^2 u_m}{\partial t^2}
++\frac{\partial u_m}{\partial t}
+=\nabla\cdot\left(\frac{k}{C}\nabla u_m\right)
+-\nabla\cdot\qvec_b
++\left(\dot{q}_e+\tau\frac{\partial\dot{q}_e}{\partial t}\right).
+\end{equation*}
+
+\textbf{Figure idea.} Draw a block diagram: boundary rays compute \(\qvec_b\); FEM solves for \(u_m\); total energy is \(u=u_m+u_b\).
+
+\textbf{Speaker emphasis.} The term \(-\nabla\cdot\qvec_b\) is the physics Fourier and Cattaneo miss.
+
+\section{Slide 12: Thin-film benchmark}
+\begin{physicsbox}
+\textbf{Main question.} How do we validate the model before using it in 3D geometry?
+\end{physicsbox}
+
+\textbf{Core message.} Reduce the equation to a one-dimensional film, nondimensionalize it, and sweep the Knudsen number.
+
+\textbf{Equation to show:}
+\begin{equation*}
+\frac{\partial^2\theta_m}{\partial {t^*}^2}
++\frac{\partial\theta_m}{\partial t^*}
+=\frac{\mathrm{Kn}^2}{3}\frac{\partial^2\theta_m}{\partial\eta^2}
+-\mathrm{Kn}\frac{\partial q_b^*}{\partial\eta}.
+\end{equation*}
+
+\textbf{Figure idea.} Draw a film from \(\eta=0\) to \(\eta=1\), heated at the left boundary.
+
+\textbf{Speaker emphasis.} This is the first numerical validation target for the project. The goal is to verify the physics before building the 3D qubit geometry.
+
+\section{Slide 13: Finite arrival time in the thin film}
+\begin{physicsbox}
+\textbf{Main question.} How does the model enforce finite propagation speed?
+\end{physicsbox}
+
+\textbf{Core message.} At a given position and time, only carrier directions that could have physically arrived contribute.
+
+\textbf{Equations to show:}
+\begin{align*}
+\mu_t &= \frac{\eta}{\mathrm{Kn}\,t^*},\\
+q_b^*(\eta,t^*)&=\frac{1}{2}\int_{\mu_t}^{1}\mu\exp\left(-\frac{\eta}{\mu\mathrm{Kn}}\right)d\mu.
+\end{align*}
+
+\textbf{Figure idea.} Draw shallow-angle and forward-angle paths from the left boundary to a point in the film. Only paths that can arrive by time \(t^*\) contribute.
+
+\textbf{Speaker emphasis.} The lower angular limit is the finite-flight-time physics. It is not a numerical trick; it is the causality condition for boundary-emitted carriers.
+
+\section{Slide 14: Expected validation plots}
+\begin{physicsbox}
+\textbf{Main question.} What should the simulation show?
+\end{physicsbox}
+
+\textbf{Core message.} As \(\mathrm{Kn}\) increases, the solution transitions from Fourier-like diffusion to ballistic-diffusive transport.
+
+\textbf{Plots to generate:}
+\begin{itemize}[leftmargin=1.6em]
+    \item \(\theta_m(\eta,t^*)\), the medium/scattered energy profile,
+    \item \(\theta_b(\eta,t^*)\), the ballistic energy profile,
+    \item \(\theta=\theta_m+\theta_b\), the total equivalent energy/temperature profile,
+    \item \(q_b^*(\eta,t^*)\), the nondimensional ballistic flux,
+    \item surface heat flux versus time,
+    \item comparison against Fourier and Cattaneo models.
+\end{itemize}
+
+\textbf{Speaker emphasis.} The goal is not just code output. The goal is to demonstrate the change in physical regime.
+
+\section{Slide 15: Why this matters for superconducting qubits}
+\begin{physicsbox}
+\textbf{Main question.} How does Module 1 connect to quasiparticle poisoning?
+\end{physicsbox}
+
+\textbf{Core message.} A local energy deposition event in a superconducting qubit chip may launch nonequilibrium phonons and energy carriers. Before local equilibrium is established, geometry, traps, heat sinks, and boundaries can strongly affect where energy goes.
+
+\textbf{Figure idea.} Draw a planar transmon with a local source near one pad, ballistic phonon paths through the substrate, and engineered trap or heat-sink regions.
+
+\textbf{Speaker emphasis.} Module 1 provides the transport foundation. Later modules add superconductivity, quasiparticles, geometry, FEM, and PINN acceleration.
+
+\section{Suggested Module 1 presentation flow}
+For a 30-minute full project presentation, Module 1 should probably occupy only five to seven slides. For a longer technical discussion or internal study lecture, the full 15-slide sequence is appropriate. A compressed version would use:
+\begin{enumerate}[leftmargin=1.6em]
+    \item Slide 1: why Fourier conduction breaks down,
+    \item Slide 2: mean free path and Knudsen number,
+    \item Slide 4: Boltzmann transport equation,
+    \item Slide 7: why Cattaneo is incomplete,
+    \item Slide 8 or 11: ballistic-diffusive split and final PDE,
+    \item Slide 12 or 13: thin-film validation,
+    \item Slide 15: connection to superconducting qubits.
+\end{enumerate}
+
+\begin{notebox}
+\textbf{Next document to build.} Once the Module 1 physics note and this slide outline are stable, the next useful artifact is a real PowerPoint or Beamer-style lecture deck. That deck should use this outline for structure but should replace most text with diagrams, equations, and speaker notes.
+\end{notebox}
+
+\end{document}

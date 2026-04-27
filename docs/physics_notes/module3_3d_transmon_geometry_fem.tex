@@ -1,0 +1,157 @@
+
+\documentclass[11pt]{article}
+\input{../shared/project_style.tex}
+\rhead{Module 3}
+\begin{document}
+
+\DocTitle{Module 3: Three-Dimensional Planar Transmon Geometry and FEM}{Hard-coded MATLAB geometry for quasiparticle-poisoning mitigation studies}{Physics note for FEM\_BallisticDiffusion\_PINN}
+
+\begin{overviewbox}
+\textbf{Purpose.} This note defines the first physical device geometry for the project: a planar transmon-like superconducting qubit structure. The goal is not to simulate quantum gate dynamics. The goal is to create a geometry-resolved thermal and quasiparticle transport model in which trap material, trap placement, pad shape, substrate material, and heat-sink geometry can be changed systematically.
+\end{overviewbox}
+
+\ProjectTOC
+
+\SymbolsAcronymsSection
+\begin{symtable}
+Transmon & Transmission-line shunted plasma oscillation qubit & Superconducting qubit design consisting of a Josephson junction shunted by a large capacitance. \\
+CPB & Cooper-pair box & Charge qubit ancestor of the transmon. \\
+$E_J$ & Josephson energy & Energy scale associated with tunneling of Cooper pairs across the Josephson junction. \\
+$E_C$ & Charging energy & Energy cost for changing island charge by one Cooper pair. \\
+$C_\Sigma$ & Total capacitance & Effective shunt capacitance of the qubit island. \\
+$\Omega$ & Computational domain & Full 3D body used by the FEM solver. \\
+$\Omega_{\mathrm{sub}}$ & Substrate region & Sapphire or silicon substrate volume. \\
+$\Omega_{\mathrm{sc}}$ & Superconducting metal region & Aluminum, tantalum, or niobium pad/lead region. \\
+$\Omega_{\mathrm{trap}}$ & Trap region & Normal-metal region that removes quasiparticles. \\
+$\Omega_{\JJ}$ & Junction-sensitive region & Effective small region near the Josephson junction. \\
+$h_e$ & Element size & Characteristic local finite-element length scale. \\
+$N_i$ & Shape function & FEM interpolation basis function associated with node $i$. \\
+$M$ & Mass matrix & FEM matrix from time-derivative terms. \\
+$K$ & Stiffness matrix & FEM matrix from diffusion terms. \\
+$A$ & Reaction/trap matrix & FEM matrix from local sink or reaction terms. \\
+$J_{\JJ}$ & Junction exposure metric & Time-integrated quasiparticle density in $\Omega_{\JJ}$. \\
+\end{symtable}
+
+\section{Why a planar transmon is the right first geometry}
+A planar transmon is a good first geometry because it contains the important physical features without requiring an impossible first mesh. It has superconducting pads, a dielectric substrate, a small Josephson junction region, and natural locations for quasiparticle traps and heat sinks. It is also geometrically simple enough to hard-code in MATLAB using cuboids.
+
+The transmon design logic is based on making the Josephson energy much larger than the charging energy:
+\begin{equation}
+\frac{E_J}{E_C}\gg 1.
+\end{equation}
+The large shunt capacitance reduces sensitivity to offset charge noise. For this project, the most important geometric consequence is that the qubit contains large superconducting capacitor pads connected by a small junction region. That separation lets us ask a meaningful transport question: how does a nonequilibrium quasiparticle population generated in one place reach, avoid, or get removed before reaching the junction?
+
+\section{Baseline dimensions}
+The baseline device is defined by a substrate and several metal cuboids. The first dimensions are intentionally approximate and sweepable.
+
+\begin{longtable}{p{0.23\linewidth} p{0.20\linewidth} p{0.26\linewidth} p{0.22\linewidth}}
+\toprule
+\textbf{Region} & \textbf{Material} & \textbf{Dimensions} & \textbf{Modeling role}\\
+\midrule
+Substrate & sapphire or high-resistivity silicon & $3~\mathrm{mm}\times3~\mathrm{mm}\times0.5~\mathrm{mm}$ & Main 3D body.\\
+Left capacitor pad & Al baseline & $600~\mu\mathrm{m}\times300~\mu\mathrm{m}\times100~\mathrm{nm}$ & Left superconducting island.\\
+Right capacitor pad & Al baseline & $600~\mu\mathrm{m}\times300~\mu\mathrm{m}\times100~\mathrm{nm}$ & Right superconducting island.\\
+Pad gap & exposed substrate & $60~\mu\mathrm{m}$ baseline & Capacitive gap.\\
+Junction leads & Al & $8~\mu\mathrm{m}$ wide, $40~\mu\mathrm{m}$ long & Connect pads to junction.\\
+Effective JJ region & Al/AlOx/Al reduced patch & $1~\mu\mathrm{m}\times1~\mu\mathrm{m}\times100~\mathrm{nm}$ effective & Sensitive region for metric.\\
+Normal trap & Cu/Au/Pd & $100~\mu\mathrm{m}\times10~\mu\mathrm{m}\times80~\mathrm{nm}$ & QP sink.\\
+Backside heat sink & Cu/Au & $300~\mu\mathrm{m}\times300~\mu\mathrm{m}\times1~\mu\mathrm{m}$ effective & Optional thermal sink.\\
+\bottomrule
+\end{longtable}
+
+\section{Important multiscale modeling decision}
+The Josephson junction contains an oxide barrier that can be only a few nanometers thick. The substrate is hundreds of micrometers thick and millimeters wide. If the mesh tried to resolve the oxide thickness directly across the whole structure, the element count would become unreasonable.
+
+Therefore the first implementation uses an effective region model:
+\begin{equation}
+\Omega_{\JJ}=\text{small effective sensitive volume near the junction},
+\end{equation}
+not a direct oxide-barrier mesh. Quasiparticle poisoning is measured by integrating density in this effective region. The junction can also be assigned special source, sink, or loss parameters without meshing the barrier explicitly.
+
+\section{Geometry as a set of cuboids}
+Each physical region is represented as an axis-aligned cuboid:
+\begin{equation}
+\mathcal{B}_r=\{(x,y,z):x_{r,1}\le x\le x_{r,2},\;y_{r,1}\le y\le y_{r,2},\;z_{r,1}\le z\le z_{r,2}\}.
+\end{equation}
+The MATLAB geometry builder stores these cuboids in a structure array. Material tagging is then done by testing the center of each finite element against each cuboid.
+
+This is not as geometrically flexible as CAD, but it is exactly right for the first project stage because it is transparent, version-controllable, and easy to sweep.
+
+\section{Scalar FEM problem for heat transport}
+For a temperature-like unknown $T(\rvec,t)$, the baseline diffusion equation is
+\begin{equation}
+C(\rvec)\frac{\partial T}{\partial t}=\nabla\cdot\left(k(\rvec)\nabla T\right)+Q(\rvec,t).
+\end{equation}
+Multiplying by a test function $w$ and integrating over the domain gives
+\begin{equation}
+\int_\Omega w C\frac{\partial T}{\partial t}\,\dd V
++\int_\Omega \nabla w\cdot k\nabla T\,\dd V
+=\int_\Omega w Q\,\dd V+\int_{\partial\Omega}w k\nabla T\cdot\nvec\,\dd A.
+\end{equation}
+With finite-element expansion
+\begin{equation}
+T(\rvec,t)\approx\sum_{j=1}^{N}T_j(t)N_j(\rvec),
+\end{equation}
+the semi-discrete system is
+\begin{equation}
+M\frac{\dd \bm{T}}{\dd t}+K\bm{T}=\bm{f}(t)+\bm{g}(t),
+\end{equation}
+where
+\begin{equation}
+M_{ij}=\int_\Omega C N_iN_j\,\dd V,\qquad
+K_{ij}=\int_\Omega k\nabla N_i\cdot\nabla N_j\,\dd V.
+\end{equation}
+
+\section{Scalar FEM problem for quasiparticles}
+For quasiparticle density, use the reduced diffusion-reaction-trapping equation
+\begin{equation}
+\frac{\partial n_{\qp}}{\partial t}=\nabla\cdot\left(D_{\qp}\nabla n_{\qp}\right)-\Gamma(\rvec)n_{\qp}+S_{\qp}(\rvec,t)
+\end{equation}
+for the first linearized implementation. Here $\Gamma$ may include a linearized recombination term and a trap term. The weak form gives
+\begin{equation}
+M_n\frac{\dd \bm{n}}{\dd t}+K_n\bm{n}+A_n\bm{n}=\bm{s}(t),
+\end{equation}
+with
+\begin{equation}
+(M_n)_{ij}=\int_\Omega N_iN_j\,\dd V,
+\end{equation}
+\begin{equation}
+(K_n)_{ij}=\int_\Omega D_{\qp}\nabla N_i\cdot\nabla N_j\,\dd V,
+\end{equation}
+\begin{equation}
+(A_n)_{ij}=\int_\Omega \Gamma(\rvec)N_iN_j\,\dd V.
+\end{equation}
+
+\section{Junction poisoning metric}
+The physically relevant metric is not the maximum density somewhere on the chip. It is the density near the junction integrated over time:
+\begin{equation}
+J_{\JJ}=\int_0^{t_f}\int_{\Omega_{\JJ}}n_{\qp}(\rvec,t)\,\dd V\,\dd t.
+\end{equation}
+In FEM form this becomes approximately
+\begin{equation}
+J_{\JJ}\approx\sum_{m=0}^{N_t}\Delta t_m\sum_{e\in\mathcal{E}_{\JJ}}V_e\,\bar{n}_{e}^{(m)},
+\end{equation}
+where $\mathcal{E}_{\JJ}$ is the set of elements whose centers lie in the junction-sensitive region, $V_e$ is element volume, and $\bar{n}_e^{(m)}$ is the element-average density at time step $m$.
+
+\section{What should be swept first}
+The first geometry sweeps should be simple and physically interpretable:
+\begin{enumerate}[leftmargin=1.6em]
+    \item no trap versus one trap,
+    \item trap distance from the junction,
+    \item trap length and width,
+    \item trap material through $\Gamma_{\mathrm{trap}}$ and thermal conductivity,
+    \item substrate material,
+    \item backside heat-sink location and size.
+\end{enumerate}
+
+\section{Limitations of the first geometry model}
+This model is a transport model, not a full superconducting quantum circuit simulation. It does not yet solve the electromagnetic mode structure, the capacitance matrix, the participation ratios, or the Josephson nonlinear quantum Hamiltonian. Those can be added later. The first target is narrower and more realistic: reduce quasiparticle exposure near the junction in a geometry-resolved 3D transport model.
+
+\section{References}
+\begin{enumerate}[label={[\arabic*]}]
+\item J. Koch et al., ``Charge-insensitive qubit design derived from the Cooper pair box,'' \emph{Physical Review A} \textbf{76}, 042319 (2007).
+\item M. Tinkham, \emph{Introduction to Superconductivity}, 2nd ed., Dover (2004).
+\item O. V. Lounasmaa, \emph{Experimental Principles and Methods Below 1 K}, Academic Press (1974).
+\end{enumerate}
+
+\end{document}
