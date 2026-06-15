@@ -72,6 +72,21 @@ P1 approximation & First-order spherical harmonics approximation & Angular-momen
 \(\partial\Omega\) & Boundary of the domain & Surface enclosing \(\Omega\). \\
 \(w\) & Test function & Weighting function used to form the FEM weak statement. \\
 \(N_i\) & FEM basis function & Shape function associated with node \(i\). \\
+\(\phi\) & Generic FEM scalar unknown & In the FEM derivation, \(\phi\) denotes either \(u_m\) or the nondimensional medium energy \(\theta_m\). \\
+\(\phi_h\) & FEM approximation & Piecewise-polynomial approximation to \(\phi\). \\
+\(\Phi_i\) & Nodal degree of freedom & Coefficient multiplying basis function \(N_i\); usually the value of \(\phi_h\) at node \(i\). \\
+\(\Omega_e\) & Element domain & Subregion of the mesh used for element-level integration. \\
+\(h_e\) & Element size & Length of a one-dimensional element or characteristic size of a multidimensional element. \\
+\(\Gamma_D\) & Dirichlet boundary & Boundary on which \(\phi\) is prescribed. \\
+\(\Gamma_N\) & Neumann boundary & Boundary on which normal diffusive flux is prescribed. \\
+\(\Gamma_R\) & Robin/Marshak boundary & Boundary with mixed value-gradient relation such as the ballistic-diffusive medium boundary condition. \\
+\(\bm{N}\) & Shape-function row vector & Vector collecting element shape functions. \\
+\(\bm{B}\) & Gradient matrix & Matrix collecting spatial gradients of shape functions. \\
+\(\bm{J}\) & Geometric Jacobian & Matrix mapping natural element coordinates to physical coordinates. \\
+\(\xi\) & Natural coordinate & Reference-element coordinate used for element integration. \\
+\(M_e,K_e,F_e\) & Element matrices/vectors & Element mass matrix, stiffness matrix, and load/source vector. \\
+\(A_{\mathrm{eff}}\) & Effective solve matrix & Matrix solved at one time step after time discretization. \\
+\(\Delta t\) & Time step & Increment between two discrete time levels. \\
 \(M\) & Mass matrix & FEM matrix from \(\int_\Omega N_i N_j\,\dd V\). \\
 \(K\) & Stiffness matrix & FEM matrix from \(\int_\Omega \nabla N_i\cdot \alpha \nabla N_j\,\dd V\). \\
 \(\eta\) & Nondimensional coordinate & \(\eta=x/L\). \\
@@ -1042,70 +1057,968 @@ The ballistic-diffusive model keeps the strongest advantages of both description
 \end{align}
 It avoids a full phase-space solve while retaining the physical mechanism that Fourier and Cattaneo miss: unscattered carriers crossing a finite structure.
 
-\section{Weak form for FEM implementation}
-The FEM starts from Eq.~\eqref{eq:bd_energy_final}. For compactness, define
+
+\section{Finite element roadmap for the ballistic-diffusive equation}
+The previous sections derived the ballistic-diffusive heat-transport equation from the Boltzmann transport picture. We now turn that physics equation into the finite element method used by the code. The purpose of this section is pedagogical: we will not simply state the weak form and matrix form. We will derive the whole chain.
+
+For the FEM derivation, it is useful to introduce a generic scalar unknown
 \begin{equation}
-    \alpha=\frac{k}{C},
+    \phi(\rvec,t).
+\end{equation}
+In dimensional form, \(\phi=u_m\), the medium or scattered-carrier internal energy density. In the dimensionless one-dimensional validation problem, \(\phi=\theta_m\), the normalized medium energy. This notation lets us write one FEM derivation and then specialize it.
+
+The full FEM chain is
+\begin{equation}
+\boxed{\begin{gathered}
+\text{strong form}\rightarrow\text{weighted residual}\rightarrow\text{weak form}\\
+\rightarrow\text{shape-function approximation}\rightarrow\text{element matrices}\\
+\rightarrow\text{global assembly}\rightarrow\text{boundary conditions}\\
+\rightarrow\text{nodal solve}\rightarrow\text{field reconstruction}
+\end{gathered}}
+\end{equation}
+
+\begin{physicsbox}
+\textbf{Core idea of FEM.} We replace the impossible task of satisfying the PDE exactly at every point by the more realistic task of satisfying an integrated, weighted form of the PDE over many small elements. The unknown field is represented by simple local interpolation functions, and the PDE becomes a matrix equation for nodal coefficients.
+\end{physicsbox}
+
+\section{The strong form that Module 1 actually solves}
+\subsection{Dimensional strong form}
+The dimensional ballistic-diffusive medium-energy equation is
+\begin{equation}
+    \tau\frac{\partial^2u_m}{\partial t^2}
+    +\frac{\partial u_m}{\partial t}
+    =\nabla\cdot\left(\alpha\nabla u_m\right)+S_{\mathrm{BD}},
     \qquad
-    S_{\mathrm{BD}}=-\nabla\cdot\qvec_b+\dot{q}_e+\tau\frac{\partial\dot{q}_e}{\partial t}.
+    \alpha=\frac{k}{C},
+    \label{eq:fem_dimensional_strong_original}
+\end{equation}
+where
+\begin{equation}
+    S_{\mathrm{BD}}
+    =-\nabla\cdot\qvec_b
+    +\dot q_e+\tau\frac{\partial \dot q_e}{\partial t}.
+    \label{eq:fem_sbd_dimensional}
+\end{equation}
+Moving all differential-operator terms to the left gives the residual form
+\begin{equation}
+    \boxed{
+    \mathcal{R}(u_m)
+    =\tau\frac{\partial^2u_m}{\partial t^2}
+    +\frac{\partial u_m}{\partial t}
+    -\nabla\cdot(\alpha\nabla u_m)
+    -S_{\mathrm{BD}}
+    =0
+    \quad \text{in }\Omega.}
+    \label{eq:fem_dimensional_residual}
+\end{equation}
+This is called the \emph{strong form} because the derivatives are required pointwise. In particular, the diffusion term contains a second spatial derivative when \(\alpha\) is constant:
+\begin{equation}
+    \nabla\cdot(\alpha\nabla u_m)=\alpha\nabla^2u_m.
+\end{equation}
+A classical solution must therefore be smooth enough for these derivatives to exist pointwise. FEM weakens that requirement.
+
+\subsection{Dimensionless one-dimensional strong form}
+The first validation implementation is the nondimensional thin-film equation
+\begin{equation}
+    \frac{\partial^2\theta_m}{\partial {t^*}^2}
+    +\frac{\partial\theta_m}{\partial t^*}
+    =D\frac{\partial^2\theta_m}{\partial\eta^2}
+    +s_b(\eta,t^*),
+    \qquad
+    D=\frac{\mathrm{Kn}^2}{3},
+    \label{eq:fem_1d_bd_strong}
+\end{equation}
+where
+\begin{equation}
+    s_b(\eta,t^*)=-\mathrm{Kn}\frac{\partial q_b^*}{\partial\eta}.
+    \label{eq:fem_1d_ballistic_source}
+\end{equation}
+Equivalently,
+\begin{equation}
+    \boxed{
+    \mathcal{R}(\theta_m)
+    =\frac{\partial^2\theta_m}{\partial {t^*}^2}
+    +\frac{\partial\theta_m}{\partial t^*}
+    -D\frac{\partial^2\theta_m}{\partial\eta^2}
+    -s_b
+    =0,
+    \qquad 0<\eta<1.}
+    \label{eq:fem_1d_residual}
+\end{equation}
+This is the simplest equation to use for teaching FEM because all spatial integrals are one-dimensional, but it already contains the important ballistic-diffusive structure: inertia-like thermal response, damping-like first time derivative, diffusion of scattered energy, and a ballistic source.
+
+\subsection{Boundary partition}
+For a general domain, the boundary is split into parts:
+\begin{equation}
+    \partial\Omega=\Gamma_D\cup\Gamma_N\cup\Gamma_R,
+    \qquad
+    \Gamma_i\cap\Gamma_j=\varnothing\quad (i\ne j).
+\end{equation}
+These symbols mean:
+\begin{align}
+    \Gamma_D &: \text{Dirichlet boundary, where the value of }\phi\text{ is prescribed},\\
+    \Gamma_N &: \text{Neumann boundary, where a normal flux is prescribed},\\
+    \Gamma_R &: \text{Robin or Marshak boundary, where value and normal derivative are related}.
+\end{align}
+For the ballistic-diffusive medium component, pure Dirichlet temperature conditions are usually not the most physical boundary model, because boundary-emitted carriers are already assigned to \(\qvec_b\). Still, Dirichlet conditions are useful for numerical tests.
+
+\section{Why the weak form is needed}
+\subsection{Pointwise residual versus weighted residual}
+The strong form demands
+\begin{equation}
+    \mathcal{R}(\phi)=0
+\end{equation}
+at every point. The weighted-residual idea relaxes this. We require the residual to be orthogonal to a set of test functions \(w\):
+\begin{equation}
+    \int_\Omega w\,\mathcal{R}(\phi)\,\dd V=0
+    \quad \text{for all admissible }w.
+    \label{eq:weighted_residual_start}
+\end{equation}
+If this equation holds for every possible test function in a sufficiently rich space, it is equivalent to the strong form. If we restrict \(\phi\) and \(w\) to finite-dimensional approximation spaces, Eq.~\eqref{eq:weighted_residual_start} becomes a practical numerical method.
+
+\subsection{Why integration by parts is the decisive step}
+The diffusion term contains \(\nabla\cdot(\alpha\nabla\phi)\), which involves second derivatives of \(\phi\). If we used the weighted residual directly, our approximate \(\phi_h\) would need continuous second derivatives. Standard linear finite elements do not have that. They are continuous, but their slopes are discontinuous from element to element.
+
+The key identity is the divergence product rule:
+\begin{equation}
+    \nabla\cdot(w\alpha\nabla\phi)
+    =\nabla w\cdot\alpha\nabla\phi+w\nabla\cdot(\alpha\nabla\phi).
+\end{equation}
+Rearrange:
+\begin{equation}
+    w\nabla\cdot(\alpha\nabla\phi)
+    =\nabla\cdot(w\alpha\nabla\phi)-\nabla w\cdot\alpha\nabla\phi.
+\end{equation}
+Integrate over \(\Omega\) and use the divergence theorem:
+\begin{equation}
+    \int_\Omega w\nabla\cdot(\alpha\nabla\phi)\,\dd V
+    =\int_{\partial\Omega} w\alpha\nabla\phi\cdot\nvec\,\dd A
+    -\int_\Omega \nabla w\cdot\alpha\nabla\phi\,\dd V.
+    \label{eq:fem_parts_identity}
+\end{equation}
+This identity moves one spatial derivative from \(\phi\) to \(w\). After this step, the method only requires first derivatives of shape functions, which is exactly what standard FEM provides.
+
+\begin{physicsbox}
+\textbf{Physical meaning of integration by parts.} The volume diffusion operator is converted into two pieces: an interior gradient-gradient energy exchange term and a boundary normal-flux term. That boundary term is where Neumann and Marshak boundary conditions enter naturally.
+\end{physicsbox}
+
+\section{Weak form in dimensional variables}
+Start from the residual equation
+\begin{equation}
+    \tau\phi_{tt}+\phi_t-\nabla\cdot(\alpha\nabla\phi)-S=0,
+    \label{eq:fem_generic_strong}
+\end{equation}
+where, for the dimensional problem,
+\begin{equation}
+    \phi=u_m,
+    \qquad
+    S=S_{\mathrm{BD}}.
+\end{equation}
+Multiply by a test function \(w\) and integrate:
+\begin{equation}
+    \int_\Omega w\tau\phi_{tt}\,\dd V
+    +\int_\Omega w\phi_t\,\dd V
+    -\int_\Omega w\nabla\cdot(\alpha\nabla\phi)\,\dd V
+    -\int_\Omega wS\,\dd V=0.
+\end{equation}
+Use Eq.~\eqref{eq:fem_parts_identity} on the diffusion term. The weak form becomes
+\begin{equation}
+    \boxed{
+    \int_\Omega w\tau\phi_{tt}\,\dd V
+    +\int_\Omega w\phi_t\,\dd V
+    +\int_\Omega \nabla w\cdot\alpha\nabla\phi\,\dd V
+    =\int_\Omega wS\,\dd V
+    +\int_{\partial\Omega} w\alpha\nabla\phi\cdot\nvec\,\dd A.}
+    \label{eq:fem_generic_weak}
+\end{equation}
+This is the central FEM statement for Module 1.
+
+The term-by-term interpretation is:
+\begin{align}
+    \int_\Omega w\tau\phi_{tt}\,\dd V
+    &:\quad \text{thermal inertia-like contribution from finite relaxation time},\\
+    \int_\Omega w\phi_t\,\dd V
+    &:\quad \text{relaxation/damping contribution},\\
+    \int_\Omega \nabla w\cdot\alpha\nabla\phi\,\dd V
+    &:\quad \text{diffusive coupling between neighboring regions},\\
+    \int_\Omega wS\,\dd V
+    &:\quad \text{volumetric source, including ballistic deposition},\\
+    \int_{\partial\Omega} w\alpha\nabla\phi\cdot\nvec\,\dd A
+    &:\quad \text{boundary flux contribution}.
+\end{align}
+
+\subsection{Conservative weak form for the ballistic source}
+The source \(S_{\mathrm{BD}}\) contains \(-\nabla\cdot\qvec_b\). There are two ways to discretize it.
+
+The direct way is
+\begin{equation}
+    F_{b,i}^{\mathrm{direct}}
+    =\int_\Omega N_i\left(-\nabla\cdot\qvec_b\right)\,\dd V.
+    \label{eq:direct_ballistic_load}
+\end{equation}
+This requires differentiating the ballistic flux field. If \(\qvec_b\) is computed by ray tracing or angular quadrature, numerical differentiation can be noisy.
+
+A more conservative FEM form integrates the ballistic divergence by parts:
+\begin{align}
+    \int_\Omega w(-\nabla\cdot\qvec_b)\,\dd V
+    &=-\int_{\partial\Omega} w\qvec_b\cdot\nvec\,\dd A
+    +\int_\Omega \nabla w\cdot\qvec_b\,\dd V.
+    \label{eq:ballistic_source_by_parts}
+\end{align}
+Thus the ballistic load can be assembled as
+\begin{equation}
+    \boxed{
+    F_{b,i}
+    =\int_\Omega \nabla N_i\cdot\qvec_b\,\dd V
+    -\int_{\partial\Omega} N_i\qvec_b\cdot\nvec\,\dd A.}
+    \label{eq:conservative_ballistic_load}
+\end{equation}
+This is usually better because it preserves the flux-balance interpretation: ballistic energy lost from one region appears as a source for the scattered medium component.
+
+\section{Weak form for the one-dimensional validation equation}
+For teaching and validation, let
+\begin{equation}
+    \phi(\eta,t^*)=\theta_m(\eta,t^*),
+    \qquad
+    D=\frac{\mathrm{Kn}^2}{3},
+    \qquad
+    s_b=-\mathrm{Kn}\frac{\partial q_b^*}{\partial\eta}.
+\end{equation}
+The strong form is
+\begin{equation}
+    \phi_{t^*t^*}+\phi_{t^*}-D\phi_{\eta\eta}=s_b.
+\end{equation}
+Multiply by \(w(\eta)\) and integrate from \(0\) to \(1\):
+\begin{equation}
+    \int_0^1 w\phi_{t^*t^*}\,\dd\eta
+    +\int_0^1 w\phi_{t^*}\,\dd\eta
+    -\int_0^1 wD\phi_{\eta\eta}\,\dd\eta
+    =\int_0^1 ws_b\,\dd\eta.
+\end{equation}
+Integrate the second-derivative term by parts:
+\begin{equation}
+    -\int_0^1 wD\phi_{\eta\eta}\,\dd\eta
+    =\int_0^1 D w_\eta\phi_\eta\,\dd\eta
+    -\left[wD\phi_\eta\right]_{0}^{1}.
+\end{equation}
+Therefore
+\begin{equation}
+    \boxed{
+    \int_0^1 w\phi_{t^*t^*}\,\dd\eta
+    +\int_0^1 w\phi_{t^*}\,\dd\eta
+    +\int_0^1 D w_\eta\phi_\eta\,\dd\eta
+    =\int_0^1 ws_b\,\dd\eta
+    +\left[wD\phi_\eta\right]_{0}^{1}.}
+    \label{eq:fem_1d_weak}
+\end{equation}
+The bracketed boundary term means
+\begin{equation}
+    \left[wD\phi_\eta\right]_0^1
+    =w(1)D\phi_\eta(1)-w(0)D\phi_\eta(0).
+\end{equation}
+This is the one-dimensional version of the general boundary integral \(\int_{\partial\Omega} w\alpha\nabla\phi\cdot\nvec\,\dd A\).
+
+\section{The finite-dimensional approximation}
+\subsection{Mesh and nodes}
+Divide the one-dimensional domain \([0,1]\) into \(n_e\) finite elements. The nodes are
+\begin{equation}
+    0=\eta_1<\eta_2<\cdots<\eta_{n_n}=1,
+\end{equation}
+where \(n_n=n_e+1\) for a simple linear mesh. Element \(e\) connects two nodes:
+\begin{equation}
+    \Omega_e=[\eta_a,\eta_b],
+    \qquad
+    h_e=\eta_b-\eta_a.
+\end{equation}
+The FEM approximation is
+\begin{equation}
+    \boxed{
+    \phi_h(\eta,t^*)=\sum_{j=1}^{n_n}\Phi_j(t^*)N_j(\eta).}
+    \label{eq:fem_global_approx}
+\end{equation}
+The basis function \(N_j\) is usually chosen so that
+\begin{equation}
+    N_j(\eta_i)=\delta_{ij}.
+\end{equation}
+Therefore the coefficient \(\Phi_j\) is the approximate value of \(\phi\) at node \(j\):
+\begin{equation}
+    \Phi_j(t^*)=\phi_h(\eta_j,t^*).
+\end{equation}
+
+\subsection{Galerkin choice of test functions}
+The Galerkin method uses the same functions for approximation and testing:
+\begin{equation}
+    w=N_i,
+    \qquad i=1,2,\ldots,n_n.
+\end{equation}
+This gives one algebraic equation per node. The result is a matrix system for the nodal vector
+\begin{equation}
+    \bm{\Phi}(t^*)=
+    \begin{bmatrix}
+    \Phi_1(t^*) & \Phi_2(t^*) & \cdots & \Phi_{n_n}(t^*)
+    \end{bmatrix}^{T}.
+\end{equation}
+
+\section{Linear shape functions in one dimension}
+\subsection{Reference element}
+A clean way to derive element matrices is to define a reference element \(\xi\in[-1,1]\). The two linear shape functions are
+\begin{equation}
+    \widehat N_1(\xi)=\frac{1-\xi}{2},
+    \qquad
+    \widehat N_2(\xi)=\frac{1+\xi}{2}.
+    \label{eq:linear_shape_reference}
+\end{equation}
+They satisfy
+\begin{equation}
+    \widehat N_1(-1)=1,
+    \quad
+    \widehat N_1(1)=0,
+    \qquad
+    \widehat N_2(-1)=0,
+    \quad
+    \widehat N_2(1)=1.
+\end{equation}
+The physical coordinate inside element \(e\) is mapped by
+\begin{equation}
+    \eta(\xi)=\widehat N_1(\xi)\eta_a+\widehat N_2(\xi)\eta_b.
+\end{equation}
+The Jacobian of the map is
+\begin{equation}
+    J_e=\frac{\dd\eta}{\dd\xi}=\frac{h_e}{2}.
+\end{equation}
+Thus
+\begin{equation}
+    \dd\eta=J_e\,\dd\xi=\frac{h_e}{2}\,\dd\xi,
+    \qquad
+    \frac{\dd}{\dd\eta}=\frac{\dd\xi}{\dd\eta}\frac{\dd}{\dd\xi}=\frac{2}{h_e}\frac{\dd}{\dd\xi}.
+\end{equation}
+
+\subsection{Shape functions in physical coordinates}
+On the physical element \([\eta_a,\eta_b]\), the same functions can be written as
+\begin{equation}
+    N_1^{(e)}(\eta)=\frac{\eta_b-\eta}{h_e},
+    \qquad
+    N_2^{(e)}(\eta)=\frac{\eta-\eta_a}{h_e}.
+    \label{eq:linear_shape_physical}
+\end{equation}
+Their derivatives are constant:
+\begin{equation}
+    \frac{\dd N_1^{(e)}}{\dd\eta}=-\frac{1}{h_e},
+    \qquad
+    \frac{\dd N_2^{(e)}}{\dd\eta}=+\frac{1}{h_e}.
+    \label{eq:linear_shape_derivatives}
+\end{equation}
+This is why linear one-dimensional FEM is so transparent: the field is piecewise linear and the gradient is piecewise constant.
+
+\section{Element-level approximation}
+On element \(e\), collect the two local nodal unknowns into
+\begin{equation}
+    \bm{\Phi}_e=
+    \begin{bmatrix}
+    \Phi_a\\
+    \Phi_b
+    \end{bmatrix}.
+\end{equation}
+The element interpolation is
+\begin{equation}
+    \phi_h^{(e)}(\eta,t^*)
+    =N_1^{(e)}(\eta)\Phi_a(t^*)+N_2^{(e)}(\eta)\Phi_b(t^*)
+    =\bm{N}_e(\eta)\bm{\Phi}_e(t^*),
+\end{equation}
+where
+\begin{equation}
+    \bm{N}_e=
+    \begin{bmatrix}
+    N_1^{(e)} & N_2^{(e)}
+    \end{bmatrix}.
+\end{equation}
+The spatial derivative is
+\begin{equation}
+    \frac{\partial\phi_h^{(e)}}{\partial\eta}
+    =\frac{\dd N_1^{(e)}}{\dd\eta}\Phi_a
+    +\frac{\dd N_2^{(e)}}{\dd\eta}\Phi_b
+    =\bm{B}_e\bm{\Phi}_e,
+\end{equation}
+with
+\begin{equation}
+    \bm{B}_e=
+    \begin{bmatrix}
+    -1/h_e & +1/h_e
+    \end{bmatrix}.
+\end{equation}
+
+\section{Element mass matrix}
+The first two weak-form terms involve \(\phi_{t^*t^*}\) and \(\phi_{t^*}\). Since the shape functions are time-independent,
+\begin{equation}
+    \phi_{h,t^*}^{(e)}=\bm{N}_e\dot{\bm{\Phi}}_e,
+    \qquad
+    \phi_{h,t^*t^*}^{(e)}=\bm{N}_e\ddot{\bm{\Phi}}_e.
+\end{equation}
+Choosing \(w=N_i\), the element contribution is
+\begin{equation}
+    \int_{\Omega_e} N_i\phi_{h,t^*t^*}^{(e)}\,\dd\eta
+    =\sum_{j=1}^{2}\left(\int_{\Omega_e}N_iN_j\,\dd\eta\right)\ddot\Phi_j.
+\end{equation}
+This defines the element mass matrix
+\begin{equation}
+    \boxed{M_{e,ij}=\int_{\Omega_e}N_iN_j\,\dd\eta.}
+    \label{eq:element_mass_def}
+\end{equation}
+For a linear element, compute the entries explicitly. With \(x\) temporarily denoting distance from the left element node, \(0\le x\le h_e\),
+\begin{equation}
+    N_1=1-\frac{x}{h_e},
+    \qquad
+    N_2=\frac{x}{h_e}.
+\end{equation}
+Then
+\begin{align}
+    M_{e,11}&=\int_0^{h_e}\left(1-\frac{x}{h_e}\right)^2\dd x=\frac{h_e}{3},\\
+    M_{e,22}&=\int_0^{h_e}\left(\frac{x}{h_e}\right)^2\dd x=\frac{h_e}{3},\\
+    M_{e,12}&=M_{e,21}=\int_0^{h_e}\left(1-\frac{x}{h_e}\right)\left(\frac{x}{h_e}\right)\dd x=\frac{h_e}{6}.
+\end{align}
+Therefore
+\begin{equation}
+    \boxed{
+    M_e=\frac{h_e}{6}
+    \begin{bmatrix}
+    2 & 1\\
+    1 & 2
+    \end{bmatrix}.}
+    \label{eq:linear_element_mass}
+\end{equation}
+This matrix appears twice in the ballistic-diffusive system: once multiplying \(\ddot{\bm{\Phi}}\) and once multiplying \(\dot{\bm{\Phi}}\). In dimensional form the second-derivative term is multiplied by \(\tau\), so the inertial mass-like matrix is \(\tau M\).
+
+\section{Element stiffness matrix}
+The diffusion term in the weak form is
+\begin{equation}
+    \int_{\Omega_e}D\frac{\dd N_i}{\dd\eta}\frac{\dd\phi_h}{\dd\eta}\,\dd\eta
+    =\sum_{j=1}^{2}\left(\int_{\Omega_e}D\frac{\dd N_i}{\dd\eta}\frac{\dd N_j}{\dd\eta}\,\dd\eta\right)\Phi_j.
+\end{equation}
+This defines
+\begin{equation}
+    \boxed{K_{e,ij}=\int_{\Omega_e}D\frac{\dd N_i}{\dd\eta}\frac{\dd N_j}{\dd\eta}\,\dd\eta.}
+    \label{eq:element_stiffness_def}
+\end{equation}
+Using Eq.~\eqref{eq:linear_shape_derivatives},
+\begin{align}
+    K_{e,11}&=\int_{\Omega_e}D\left(-\frac{1}{h_e}\right)\left(-\frac{1}{h_e}\right)\dd\eta=\frac{D}{h_e},\\
+    K_{e,12}&=\int_{\Omega_e}D\left(-\frac{1}{h_e}\right)\left(+\frac{1}{h_e}\right)\dd\eta=-\frac{D}{h_e},\\
+    K_{e,21}&=-\frac{D}{h_e},\\
+    K_{e,22}&=\frac{D}{h_e}.
+\end{align}
+So
+\begin{equation}
+    \boxed{
+    K_e=\frac{D}{h_e}
+    \begin{bmatrix}
+    1 & -1\\
+    -1 & 1
+    \end{bmatrix},
+    \qquad
+    D=\frac{\mathrm{Kn}^2}{3}.}
+    \label{eq:linear_element_stiffness}
+\end{equation}
+
+\begin{physicsbox}
+\textbf{Physical meaning of stiffness.} The vector \(K_e\bm{\Phi}_e\) penalizes differences between neighboring nodal values. If \(\Phi_a=\Phi_b\), the element has no gradient and \(K_e\bm{\Phi}_e=\bm{0}\). Diffusion only acts when there is spatial variation.
+\end{physicsbox}
+
+\section{Element source vector}
+\subsection{Direct ballistic source vector}
+The source vector for a known scalar source \(s_b(\eta,t^*)\) is
+\begin{equation}
+    \boxed{F_{e,i}^{(s)}(t^*)=\int_{\Omega_e}N_i(\eta)s_b(\eta,t^*)\,\dd\eta.}
+    \label{eq:element_source_def}
+\end{equation}
+If \(s_b\) is approximately constant inside the element, \(s_b\approx s_e\), then
+\begin{equation}
+    F_e^{(s)}\approx s_e\int_{\Omega_e}
+    \begin{bmatrix}
+    N_1\\N_2
+    \end{bmatrix}\dd\eta
+    =s_e\frac{h_e}{2}
+    \begin{bmatrix}
+    1\\1
+    \end{bmatrix}.
+    \label{eq:constant_source_vector}
+\end{equation}
+This is the simplest load-vector formula.
+
+\subsection{Conservative ballistic source vector in one dimension}
+Because
+\begin{equation}
+    s_b=-\mathrm{Kn}\frac{\partial q_b^*}{\partial\eta},
+\end{equation}
+we can write
+\begin{align}
+    F_{e,i}^{(b)}
+    &=-\mathrm{Kn}\int_{\Omega_e}N_i\frac{\partial q_b^*}{\partial\eta}\,\dd\eta\\
+    &=-\mathrm{Kn}\left[N_iq_b^*\right]_{\eta_a}^{\eta_b}
+    +\mathrm{Kn}\int_{\Omega_e}\frac{\dd N_i}{\dd\eta}q_b^*\,\dd\eta.
+    \label{eq:conservative_1d_ballistic_load}
+\end{align}
+This form uses \(q_b^*\) itself rather than a numerical derivative of \(q_b^*\). For ray-based or quadrature-based ballistic flux, this is usually more stable and more faithful to energy conservation.
+
+For a linear element, the derivatives \(\dd N_i/\dd\eta\) are constants, so the volume part is especially simple:
+\begin{equation}
+    \mathrm{Kn}\int_{\Omega_e}\frac{\dd N_1}{\dd\eta}q_b^*\,\dd\eta
+    =-\frac{\mathrm{Kn}}{h_e}\int_{\Omega_e}q_b^*\,\dd\eta,
+\end{equation}
+\begin{equation}
+    \mathrm{Kn}\int_{\Omega_e}\frac{\dd N_2}{\dd\eta}q_b^*\,\dd\eta
+    =+\frac{\mathrm{Kn}}{h_e}\int_{\Omega_e}q_b^*\,\dd\eta.
+\end{equation}
+The boundary part transfers ballistic flux across element faces. When assembled over all elements, interior face contributions cancel in pairs, leaving only physical domain-boundary ballistic flux plus elementwise deposition due to attenuation.
+
+\section{Numerical quadrature}
+For simple linear elements with constant \(D\), the mass and stiffness matrices can be integrated analytically. In general, FEM codes use quadrature. On the reference element,
+\begin{equation}
+    \int_{\Omega_e}g(\eta)\,\dd\eta
+    =\int_{-1}^{1}g[\eta(\xi)]J_e\,\dd\xi
+    \approx\sum_{q=1}^{n_q}w_q g[\eta(\xi_q)]J_e.
+\end{equation}
+For two-point Gauss quadrature on \([-1,1]\),
+\begin{equation}
+    \xi_1=-\frac{1}{\sqrt{3}},
+    \qquad
+    \xi_2=+\frac{1}{\sqrt{3}},
+    \qquad
+    w_1=w_2=1.
+\end{equation}
+This quadrature exactly integrates polynomials up to degree three. Since the linear-element mass integrand \(N_iN_j\) is quadratic, two-point Gauss quadrature exactly recovers Eq.~\eqref{eq:linear_element_mass}.
+
+For the ballistic source, quadrature is not merely a convenience. The function \(q_b^*(\eta,t^*)\) can contain sharp arrival fronts because of the finite-arrival condition \(\mu_t=\eta/(\mathrm{Kn}t^*)\). A practical implementation should evaluate \(q_b^*\) at quadrature points and use enough spatial and temporal resolution to capture those fronts.
+
+\section{Global assembly}
+Each element produces a local matrix equation of the form
+\begin{equation}
+    M_e\ddot{\bm{\Phi}}_e+M_e\dot{\bm{\Phi}}_e+K_e\bm{\Phi}_e=\bm{F}_e.
+\end{equation}
+The local vector \(\bm{\Phi}_e\) contains only the degrees of freedom attached to the element. The global vector \(\bm{\Phi}\) contains all nodal degrees of freedom. Assembly is the process of adding local contributions into the correct global rows and columns.
+
+Suppose element \(e\) connects global nodes \(a\) and \(b\). Its local-to-global map is
+\begin{equation}
+    \mathrm{conn}(e,:)=[a,b].
+\end{equation}
+Then the assembly rule is
+\begin{equation}
+    M_{A B}\leftarrow M_{A B}+M_{e,ij},
+    \qquad
+    K_{A B}\leftarrow K_{A B}+K_{e,ij},
+    \qquad
+    F_A\leftarrow F_A+F_{e,i},
+\end{equation}
+where
+\begin{equation}
+    A=\mathrm{conn}(e,i),
+    \qquad
+    B=\mathrm{conn}(e,j).
+\end{equation}
+
+For three linear elements, the stiffness matrix has the schematic tridiagonal form
+\begin{equation}
+    K=\begin{bmatrix}
+    k_1 & -k_1 & 0 & 0\\
+    -k_1 & k_1+k_2 & -k_2 & 0\\
+    0 & -k_2 & k_2+k_3 & -k_3\\
+    0 & 0 & -k_3 & k_3
+    \end{bmatrix},
+    \qquad
+    k_e=\frac{D}{h_e}.
+\end{equation}
+The diagonal entries collect all elements touching a node. The off-diagonal entries couple neighboring nodes.
+
+\begin{notebox}
+\textbf{Implementation meaning.} Assembly is not mysterious. It is just bookkeeping: compute each small element matrix, then add its numbers into the large global sparse matrix at the rows and columns corresponding to that element's nodes.
+\end{notebox}
+
+\section{Boundary conditions in the FEM system}
+\subsection{Natural Neumann boundary condition}
+From the weak form, the natural boundary term is
+\begin{equation}
+    \int_{\partial\Omega}w\alpha\nabla\phi\cdot\nvec\,\dd A.
+\end{equation}
+Define the outward diffusive energy flux as
+\begin{equation}
+    g=-\alpha\nabla\phi\cdot\nvec.
 \end{equation}
 Then
 \begin{equation}
-    \tau\frac{\partial^2u_m}{\partial t^2}+\frac{\partial u_m}{\partial t}
-    =\nabla\cdot(\alpha\nabla u_m)+S_{\mathrm{BD}}.
+    \alpha\nabla\phi\cdot\nvec=-g,
 \end{equation}
-Move everything except the source to the left:
+and the boundary contribution is
 \begin{equation}
-    \tau\frac{\partial^2u_m}{\partial t^2}+\frac{\partial u_m}{\partial t}
-    -\nabla\cdot(\alpha\nabla u_m)=S_{\mathrm{BD}}.
+    -\int_{\Gamma_N}w g\,\dd A.
 \end{equation}
-Multiply by a test function \(w\) and integrate over \(\Omega\):
+Thus, depending on sign convention, a prescribed outward heat flux may enter the load vector with a minus sign. The safest rule is to start from the weak form and explicitly define whether the prescribed flux is \(\alpha\nabla\phi\cdot\nvec\) or \(-\alpha\nabla\phi\cdot\nvec\).
+
+In one dimension, the boundary contribution is
 \begin{equation}
-    \int_\Omega w\tau\frac{\partial^2u_m}{\partial t^2}\,\dd V
-    +\int_\Omega w\frac{\partial u_m}{\partial t}\,\dd V
-    -\int_\Omega w\nabla\cdot(\alpha\nabla u_m)\,\dd V
-    =\int_\Omega wS_{\mathrm{BD}}\,\dd V.
+    \left[wD\phi_\eta\right]_0^1=w(1)D\phi_\eta(1)-w(0)D\phi_\eta(0).
 \end{equation}
-Integrate the diffusion term by parts:
+At \(\eta=1\), the outward normal is \(+1\). At \(\eta=0\), the outward normal is \(-1\). That is why the two endpoint signs differ.
+
+\subsection{Dirichlet boundary condition}
+A Dirichlet boundary condition prescribes
 \begin{equation}
-    -\int_\Omega w\nabla\cdot(\alpha\nabla u_m)\,\dd V
-    =\int_\Omega \nabla w\cdot\alpha\nabla u_m\,\dd V
-    -\int_{\partial\Omega}w\alpha\nabla u_m\cdot\nvec\,\dd A.
+    \phi=\bar\phi\quad \text{on }\Gamma_D.
 \end{equation}
-Thus the weak form is
+If node \(p\) is Dirichlet, then
+\begin{equation}
+    \Phi_p=\bar\phi_p.
+\end{equation}
+The clean elimination method partitions the unknowns into free and prescribed components:
+\begin{equation}
+    \bm{\Phi}=\begin{bmatrix}\bm{\Phi}_f\\\bm{\Phi}_d\end{bmatrix}.
+\end{equation}
+For a static-looking linear solve \(A\bm{\Phi}=\bm{b}\), the free equations become
+\begin{equation}
+    A_{ff}\bm{\Phi}_f=\bm{b}_f-A_{fd}\bm{\Phi}_d.
+\end{equation}
+This method preserves symmetry of \(A_{ff}\). Another common coding method is row-column modification: zero the constrained row and column, put a one on the diagonal, and set the right-hand side to the prescribed value.
+
+In the ballistic-diffusive model, one must be careful with Dirichlet temperature boundaries. If the wall emission has already been represented by \(\qvec_b\), then prescribing the same wall temperature directly on \(\theta_m\) can double-count boundary physics. For validation, Dirichlet conditions are fine; for the physical ballistic-diffusive model, Marshak-type boundaries are more consistent.
+
+\subsection{Marshak/Robin boundary condition}
+The medium boundary condition derived earlier is
+\begin{equation}
+    \tau\phi_t+\phi=-\ell_M\nabla\phi\cdot\nvec,
+    \qquad
+    \ell_M=\frac{\mfp}{3}
+    \label{eq:marshak_general_phi}
+\end{equation}
+in dimensional notation. Rearranging gives
+\begin{equation}
+    \nabla\phi\cdot\nvec=-\frac{1}{\ell_M}(\tau\phi_t+\phi).
+\end{equation}
+Therefore the weak-form boundary term is
+\begin{equation}
+    \int_{\Gamma_R}w\alpha\nabla\phi\cdot\nvec\,\dd A
+    =-\int_{\Gamma_R}w\frac{\alpha}{\ell_M}(\tau\phi_t+\phi)\,\dd A.
+\end{equation}
+Move this contribution to the left side:
+\begin{equation}
+    \int_{\Omega} w\tau\phi_{tt}\,\dd V
+    +\int_{\Omega} w\phi_t\,\dd V
+    +\int_{\Omega}\nabla w\cdot\alpha\nabla\phi\,\dd V
+    +\int_{\Gamma_R}w\frac{\alpha\tau}{\ell_M}\phi_t\,\dd A
+    +\int_{\Gamma_R}w\frac{\alpha}{\ell_M}\phi\,\dd A
+    =\int_\Omega wS\,\dd V.
+\end{equation}
+This shows that the Marshak boundary adds two boundary matrices:
+\begin{align}
+    C^{(R)}_{ij} &=\int_{\Gamma_R}N_i\frac{\alpha\tau}{\ell_M}N_j\,\dd A,\\
+    K^{(R)}_{ij} &=\int_{\Gamma_R}N_i\frac{\alpha}{\ell_M}N_j\,\dd A.
+\end{align}
+The first modifies the damping matrix, and the second modifies the stiffness matrix.
+
+For the nondimensional one-dimensional equation,
+\begin{equation}
+    \phi_{t^*}+\phi=-\frac{\mathrm{Kn}}{3}\frac{\partial\phi}{\partial n},
+\end{equation}
+and \(D=\mathrm{Kn}^2/3\). Thus
+\begin{equation}
+    D\frac{\partial\phi}{\partial n}
+    =-\mathrm{Kn}(\phi_{t^*}+\phi).
+\end{equation}
+The boundary term becomes
+\begin{equation}
+    \int_{\partial\Omega}wD\frac{\partial\phi}{\partial n}\,\dd\Gamma
+    =-\int_{\partial\Omega}w\mathrm{Kn}(\phi_{t^*}+\phi)\,\dd\Gamma.
+\end{equation}
+Moving it to the left adds
+\begin{equation}
+    \mathrm{Kn}\int_{\partial\Omega}w\phi_{t^*}\,\dd\Gamma
+    +\mathrm{Kn}\int_{\partial\Omega}w\phi\,\dd\Gamma.
+\end{equation}
+In a one-dimensional endpoint discretization, this produces contributions at the endpoint nodes. For example, if both endpoints are Marshak boundaries, the boundary matrix is schematically
+\begin{equation}
+    H=\mathrm{Kn}
+    \begin{bmatrix}
+    1 & 0 & \cdots & 0\\
+    0 & 0 & \cdots & 0\\
+    \vdots & \vdots & \ddots & \vdots\\
+    0 & 0 & \cdots & 1
+    \end{bmatrix}.
+\end{equation}
+Then the semidiscrete equation becomes
 \begin{equation}
     \boxed{
-    \int_\Omega w\tau\frac{\partial^2u_m}{\partial t^2}\,\dd V
-    +\int_\Omega w\frac{\partial u_m}{\partial t}\,\dd V
-    +\int_\Omega \nabla w\cdot\alpha\nabla u_m\,\dd V
-    =\int_\Omega wS_{\mathrm{BD}}\,\dd V
-    +\int_{\partial\Omega}w\alpha\nabla u_m\cdot\nvec\,\dd A.}
-    \label{eq:bd_weak_form}
+    M\ddot{\bm{\Phi}}+(M+H)\dot{\bm{\Phi}}+(K+H)\bm{\Phi}=\bm{F}_b.}
+    \label{eq:marshak_semidiscrete_1d}
 \end{equation}
-Boundary conditions determine how the boundary integral is evaluated.
+This equation is often the most direct form for the 1D validation code.
 
-\section{Matrix form}
-Approximate the unknown by basis functions:
+\section{Global semidiscrete matrix equation}
+Ignoring boundary matrices for the moment, the global FEM system is
 \begin{equation}
-    u_m(\rvec,t)\approx\sum_{j=1}^{N}U_j(t)N_j(\rvec).
+    \boxed{
+    M\ddot{\bm{\Phi}}+M\dot{\bm{\Phi}}+K\bm{\Phi}=\bm{F}_b(t^*)+\bm{F}_{\mathrm{ext}}(t^*)+\bm{F}_{\partial\Omega}(t^*).}
+    \label{eq:fem_global_1d_matrix}
 \end{equation}
-Choose test functions \(w=N_i\). The matrix equation becomes
+For the dimensional equation, this becomes
 \begin{equation}
-    \boxed{\tau M\ddot{\bm{U}}+M\dot{\bm{U}}+K\bm{U}=\bm{F}_{\mathrm{BD}}+\bm{F}_{\partial\Omega}.}
-    \label{eq:matrix_bd}
+    \boxed{
+    \tau M\ddot{\bm{U}}+M\dot{\bm{U}}+K\bm{U}=\bm{F}_{\mathrm{BD}}+\bm{F}_{\partial\Omega}.}
+    \label{eq:fem_dimensional_matrix_full}
 \end{equation}
-The matrices are
+Here
 \begin{align}
     M_{ij} &=\int_\Omega N_iN_j\,\dd V,\\
     K_{ij} &=\int_\Omega \nabla N_i\cdot\alpha\nabla N_j\,\dd V,\\
     (F_{\mathrm{BD}})_i &=\int_\Omega N_iS_{\mathrm{BD}}\,\dd V,\\
-    (F_{\partial\Omega})_i &=\int_{\partial\Omega}N_i\alpha\nabla u_m\cdot\nvec\,\dd A.
+    (F_{\partial\Omega})_i &=\int_{\partial\Omega}N_i\alpha\nabla\phi\cdot\nvec\,\dd A.
 \end{align}
-This second-order-in-time system can be solved directly or rewritten as a first-order system by defining \(\bm{V}=\dot{\bm{U}}\):
+With Marshak boundaries moved to the left, the form is better written as
+\begin{equation}
+    \boxed{
+    \tau M\ddot{\bm{U}}+(M+C_R)\dot{\bm{U}}+(K+K_R)\bm{U}=\bm{F}_{\mathrm{BD}}.}
+    \label{eq:fem_dimensional_matrix_robin}
+\end{equation}
+This is the FEM analog of a damped second-order system. The analogy is useful but should not be overinterpreted: \(\bm{U}\) is not a mechanical displacement. It is nodal medium energy.
+
+\section{Time discretization and solving the nodal values}
+After spatial FEM, the problem is still continuous in time. We now need nodal values at discrete time levels
+\begin{equation}
+    t_n=n\Delta t,
+    \qquad
+    \bm{\Phi}^n\approx \bm{\Phi}(t_n).
+\end{equation}
+For clarity, consider the nondimensional semidiscrete equation
+\begin{equation}
+    M\ddot{\bm{\Phi}}+C\dot{\bm{\Phi}}+K\bm{\Phi}=\bm{F}^{n},
+    \label{eq:fem_second_order_generic}
+\end{equation}
+where \(C=M\) without Marshak boundaries and \(C=M+H\) with nondimensional Marshak boundaries.
+
+\subsection{Backward-difference update}
+A simple implicit second-order finite-difference approximation is
+\begin{equation}
+    \ddot{\bm{\Phi}}^{n+1}\approx
+    \frac{\bm{\Phi}^{n+1}-2\bm{\Phi}^{n}+\bm{\Phi}^{n-1}}{\Delta t^2},
+    \qquad
+    \dot{\bm{\Phi}}^{n+1}\approx
+    \frac{\bm{\Phi}^{n+1}-\bm{\Phi}^{n}}{\Delta t}.
+\end{equation}
+Substitute into Eq.~\eqref{eq:fem_second_order_generic} at \(t_{n+1}\):
+\begin{equation}
+    M\frac{\bm{\Phi}^{n+1}-2\bm{\Phi}^{n}+\bm{\Phi}^{n-1}}{\Delta t^2}
+    +C\frac{\bm{\Phi}^{n+1}-\bm{\Phi}^{n}}{\Delta t}
+    +K\bm{\Phi}^{n+1}
+    =\bm{F}^{n+1}.
+\end{equation}
+Collect unknown \(\bm{\Phi}^{n+1}\) terms on the left:
+\begin{equation}
+    \boxed{
+    A_{\mathrm{eff}}\bm{\Phi}^{n+1}=\bm{b}^{n+1},}
+    \label{eq:effective_solve}
+\end{equation}
+where
+\begin{equation}
+    \boxed{
+    A_{\mathrm{eff}}=\frac{1}{\Delta t^2}M+\frac{1}{\Delta t}C+K,}
+    \label{eq:aeff_bdf}
+\end{equation}
+and
+\begin{equation}
+    \boxed{
+    \bm{b}^{n+1}=\bm{F}^{n+1}
+    +M\left(\frac{2\bm{\Phi}^{n}-\bm{\Phi}^{n-1}}{\Delta t^2}\right)
+    +C\left(\frac{\bm{\Phi}^{n}}{\Delta t}\right).}
+    \label{eq:rhs_bdf}
+\end{equation}
+This is the concrete meaning of ``solving the nodal values.'' At every time step, assemble or update the right-hand side and solve a sparse linear system for the next nodal vector.
+
+For the dimensional system \(\tau M\ddot{\bm{U}}+C\dot{\bm{U}}+K\bm{U}=\bm{F}\), replace \(M\) in the acceleration contribution by \(\tau M\):
+\begin{equation}
+    A_{\mathrm{eff}}=\frac{\tau}{\Delta t^2}M+\frac{1}{\Delta t}C+K.
+\end{equation}
+
+\subsection{Initial conditions}
+The second-order-in-time equation requires two initial conditions:
+\begin{equation}
+    \bm{\Phi}^{0}=\bm{\Phi}(0),
+    \qquad
+    \dot{\bm{\Phi}}^{0}=\dot{\bm{\Phi}}(0).
+\end{equation}
+For the canonical thin-film validation,
+\begin{equation}
+    \bm{\Phi}^{0}=\bm{0},
+    \qquad
+    \dot{\bm{\Phi}}^{0}=\bm{0}
+\end{equation}
+for the perturbation medium energy. A backward-difference scheme also needs \(\bm{\Phi}^{-1}\). A first-order Taylor approximation gives
+\begin{equation}
+    \bm{\Phi}^{-1}=\bm{\Phi}^{0}-\Delta t\dot{\bm{\Phi}}^{0}.
+\end{equation}
+If both are zero, \(\bm{\Phi}^{-1}=\bm{0}\). For higher accuracy, the initial acceleration can be obtained from the semidiscrete equation:
+\begin{equation}
+    M\ddot{\bm{\Phi}}^{0}=\bm{F}^{0}-C\dot{\bm{\Phi}}^{0}-K\bm{\Phi}^{0},
+\end{equation}
+and then
+\begin{equation}
+    \bm{\Phi}^{-1}=\bm{\Phi}^{0}-\Delta t\dot{\bm{\Phi}}^{0}+\frac{\Delta t^2}{2}\ddot{\bm{\Phi}}^{0}.
+\end{equation}
+
+\subsection{Algorithmic summary}
+A minimal 1D FEM solver follows this sequence:
+\begin{enumerate}[leftmargin=1.6em]
+    \item Create the nodal mesh \(\eta_i\) and element connectivity.
+    \item For each element, compute \(M_e\) and \(K_e\).
+    \item Assemble global sparse matrices \(M\) and \(K\).
+    \item Add boundary matrices \(H\) if using Marshak/Robin boundaries.
+    \item Initialize \(\bm{\Phi}^0\), \(\dot{\bm{\Phi}}^0\), and \(\bm{\Phi}^{-1}\).
+    \item At every time step, compute the ballistic flux \(q_b^*(\eta,t^*)\) and load vector \(\bm{F}_b^{n+1}\).
+    \item Form \(A_{\mathrm{eff}}\) and \(\bm{b}^{n+1}\).
+    \item Apply any essential Dirichlet constraints, if used.
+    \item Solve \(A_{\mathrm{eff}}\bm{\Phi}^{n+1}=\bm{b}^{n+1}\).
+    \item Reconstruct \(\theta_m^h(\eta,t^*)\), compute \(\theta_b\), and form \(\theta=\theta_m+\theta_b\).
+\end{enumerate}
+
+\section{Field reconstruction after solving nodes}
+Once the nodal vector has been found, the FEM solution is not only a list of numbers. It defines a continuous piecewise-polynomial field:
+\begin{equation}
+    \boxed{
+    \phi_h(\eta,t_n)=\sum_{j=1}^{n_n}\Phi_j^nN_j(\eta).}
+\end{equation}
+Inside element \(e=[\eta_a,\eta_b]\), this is simply
+\begin{equation}
+    \phi_h^{(e)}(\eta,t_n)=
+    \frac{\eta_b-\eta}{h_e}\Phi_a^n+
+    \frac{\eta-\eta_a}{h_e}\Phi_b^n.
+\end{equation}
+The gradient is
+\begin{equation}
+    \frac{\partial\phi_h^{(e)}}{\partial\eta}
+    =\frac{\Phi_b^n-\Phi_a^n}{h_e}.
+\end{equation}
+The scattered-medium diffusive flux in dimensionless variables is proportional to
+\begin{equation}
+    q_m^*=-D\frac{\partial\theta_m}{\partial\eta},
+\end{equation}
+while the total equivalent response plotted for validation is
+\begin{equation}
+    \boxed{
+    \theta_h(\eta,t^*)=\theta_{m,h}(\eta,t^*)+\theta_b(\eta,t^*).}
+\end{equation}
+Thus the final approximation is not just the medium FEM field. The ballistic-diffusive model reconstructs the observable energy-temperature response by adding the explicitly computed ballistic energy contribution.
+
+\section{Extension from 1D elements to 2D and 3D elements}
+The same FEM logic generalizes to realistic chip geometry. For a multidimensional element, write
+\begin{equation}
+    \phi_h^{(e)}(\rvec,t)=\sum_{a=1}^{n_{en}}N_a^{(e)}(\rvec)\Phi_a(t),
+\end{equation}
+where \(n_{en}\) is the number of nodes per element. In matrix notation,
+\begin{equation}
+    \phi_h^{(e)}=\bm{N}_e\bm{\Phi}_e,
+    \qquad
+    \nabla\phi_h^{(e)}=\bm{B}_e\bm{\Phi}_e.
+\end{equation}
+The element matrices are
 \begin{align}
-    \dot{\bm{U}}&=\bm{V},\\
-    \tau M\dot{\bm{V}}&=\bm{F}_{\mathrm{BD}}+\bm{F}_{\partial\Omega}-M\bm{V}-K\bm{U}.
+    M_e &=\int_{\Omega_e}\bm{N}_e^{T}\bm{N}_e\,\dd V,\\
+    K_e &=\int_{\Omega_e}\bm{B}_e^{T}\alpha\bm{B}_e\,\dd V,\\
+    \bm{F}_e &=\int_{\Omega_e}\bm{N}_e^{T}S\,\dd V
+    +\int_{\partial\Omega_e\cap\partial\Omega}\bm{N}_e^{T}\alpha\nabla\phi\cdot\nvec\,\dd A.
 \end{align}
+For an anisotropic material, \(\alpha\) becomes a tensor:
+\begin{equation}
+    \bm{\alpha}=\frac{\bm{k}}{C},
+\end{equation}
+and the stiffness matrix becomes
+\begin{equation}
+    K_e=\int_{\Omega_e}\bm{B}_e^{T}\bm{\alpha}\bm{B}_e\,\dd V.
+\end{equation}
+This matters for crystalline substrates and layered device stacks where heat transport can differ in-plane and through-thickness.
+
+\subsection{Isoparametric mapping and Jacobian}
+For quadrilateral, hexahedral, triangular, or tetrahedral elements, integrals are usually evaluated on a reference element with natural coordinates. In 3D, for example,
+\begin{equation}
+    \rvec(\xi,\zeta,\chi)=\sum_{a=1}^{n_{en}}N_a(\xi,\zeta,\chi)\rvec_a.
+\end{equation}
+The Jacobian matrix is
+\begin{equation}
+    \bm{J}=\frac{\partial(x,y,z)}{\partial(\xi,\zeta,\chi)}.
+\end{equation}
+Derivatives transform by
+\begin{equation}
+    \nabla_{\rvec}N_a=\bm{J}^{-T}\nabla_{\xi}N_a.
+\end{equation}
+The volume element transforms as
+\begin{equation}
+    \dd V=\abs{\det\bm{J}}\,\dd\xi\,\dd\zeta\,\dd\chi.
+\end{equation}
+Therefore the stiffness matrix is computed numerically as
+\begin{equation}
+    K_e\approx\sum_{q=1}^{n_q}\bm{B}_e(\xi_q)^T\bm{\alpha}(\xi_q)\bm{B}_e(\xi_q)
+    \abs{\det\bm{J}(\xi_q)}w_q.
+\end{equation}
+This is the same formula as in 1D, only with more geometry bookkeeping.
+
+\section{FEM-specific interpretation for ballistic-diffusive conduction}
+The final FEM system tells a clear physical story:
+\begin{equation}
+\begin{gathered}
+    \text{thermal inertia}+\text{relaxation}+\text{diffusive redistribution}\\
+    =\text{ballistic deposition}+\text{external heating}+\text{boundary exchange}.
+\end{gathered}
+\end{equation}
+In matrix form,
+\begin{equation}
+    \tau M\ddot{\bm{U}}+(M+C_R)\dot{\bm{U}}+(K+K_R)\bm{U}=\bm{F}_{b}+\bm{F}_{e}.
+\end{equation}
+The terms should be read as follows:
+\begin{align}
+    \tau M\ddot{\bm{U}} &: \text{finite relaxation time; prevents purely parabolic instantaneous response},\\
+    M\dot{\bm{U}} &: \text{relaxation of medium energy},\\
+    K\bm{U} &: \text{spatial smoothing by scattered-carrier diffusion},\\
+    C_R\dot{\bm{U}}+K_R\bm{U} &: \text{Marshak boundary exchange of the medium component},\\
+    \bm{F}_b &: \text{energy transferred from ballistic boundary-originating carriers into the medium},\\
+    \bm{F}_e &: \text{external volumetric heating and its relaxation correction}.
+\end{align}
+
+\begin{physicsbox}
+\textbf{Most important implementation warning.} Do not treat the ballistic-diffusive FEM solve as an ordinary heat equation with a different conductivity. The unknown solved by FEM is the medium/scattered energy. The ballistic part is computed separately and enters both as a source term and as an additive contribution to the reconstructed total energy response.
+\end{physicsbox}
+
+\section{Common checks for the Module 1 FEM implementation}
+A correct FEM implementation should satisfy the following checks.
+
+\subsection{Patch test for constant field}
+If \(\phi\) is constant and all sources are zero, then
+\begin{equation}
+    K\bm{\Phi}=\bm{0}.
+\end{equation}
+This follows from the fact that constant fields have zero gradient. Failure of this test usually indicates an error in shape-function derivatives, Jacobian factors, or assembly.
+
+\subsection{Symmetry and positivity}
+For positive \(D\) or positive \(\alpha\), the stiffness matrix should be symmetric positive semidefinite before Dirichlet constraints:
+\begin{equation}
+    \bm{x}^TK\bm{x}\ge 0.
+\end{equation}
+The mass matrix should be symmetric positive definite for unconstrained physical nodes:
+\begin{equation}
+    \bm{x}^TM\bm{x}>0
+    \quad \text{for }\bm{x}\ne\bm{0}.
+\end{equation}
+These are structural checks on the FEM discretization.
+
+\subsection{Energy-balance check}
+For the conservative ballistic loading, integrating over the whole domain should reproduce the net ballistic flux entering minus leaving, plus attenuation/deposition terms. Numerically, this means that the sum of nodal source-vector entries should agree with the domain-integrated source:
+\begin{equation}
+    \sum_i F_{b,i}\approx\int_\Omega -\nabla\cdot\qvec_b\,\dd V.
+\end{equation}
+If the conservative form Eq.~\eqref{eq:conservative_ballistic_load} is implemented correctly, this check is much more robust than differentiating a noisy \(q_b\) field.
+
+\subsection{Diffusive-limit check}
+As \(\mathrm{Kn}\ll1\), after the earliest transient, the solution should approach Fourier-like behavior. This does not mean the ballistic-diffusive equation literally becomes the same matrix equation at all times. It means the computed total response should lose strong boundary-memory effects when the mean free path is much smaller than the film thickness.
+
+\subsection{Arrival-time check}
+For \(\mathrm{Kn}\sim1\) or larger, the ballistic contribution must show delayed arrival. At position \(\eta\), no left-boundary ballistic contribution should appear before
+\begin{equation}
+    t^*<\frac{\eta}{\mathrm{Kn}}
+\end{equation}
+for the fastest forward carriers with \(\mu=1\). If the code shows immediate ballistic response everywhere, the finite-arrival lower limit in the angular integral has been implemented incorrectly.
 
 \section{Practical implementation strategy for this project}
 The project should not begin with the full qubit geometry. The physically defensible sequence is:

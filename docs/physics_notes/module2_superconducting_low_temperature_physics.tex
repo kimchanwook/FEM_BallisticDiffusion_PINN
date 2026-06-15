@@ -2,173 +2,2183 @@
 \documentclass[11pt]{article}
 \input{../shared/project_style.tex}
 \rhead{Module 2}
+
+\newcommand{\bk}{{\bm{k}}}
+\newcommand{\bp}{{\bm{p}}}
+\newcommand{\br}{{\bm{r}}}
+\newcommand{\bq}{{\bm{q}}}
+\newcommand{\bv}{{\bm{v}}}
+\newcommand{\bu}{{\bm{u}}}
+\newcommand{\bR}{{\bm{R}}}
+\newcommand{\E}{\mathcal{E}}
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\Hcal}{\mathcal{H}}
+\newcommand{\Fcal}{\mathcal{F}}
+\newcommand{\Dcal}{\mathcal{D}}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\ddt}{\frac{\partial}{\partial t}}
+\newcommand{\esc}{\mathrm{esc}}
+\newcommand{\trap}{\mathrm{trap}}
+\newcommand{\rec}{\mathrm{rec}}
+\newcommand{\eq}{\mathrm{eq}}
+\newcommand{\sub}{\mathrm{sub}}
+\newcommand{\ph}{\mathrm{ph}}
+\newcommand{\el}{\mathrm{e}}
+\newcommand{\eff}{\mathrm{eff}}
+\newcommand{\JJvol}{\Omega_{\mathrm{JJ}}}
+\newcommand{\film}{\Omega_{\mathrm{film}}}
+\newcommand{\bdry}{\partial\Omega}
+\DeclareMathOperator{\sgn}{sgn}
+
 \begin{document}
 
-\DocTitle{Module 2: Superconducting Low-Temperature Physics}{BCS gap physics, quasiparticles, recombination, diffusion, and trapping}{Physics note for FEM\_BallisticDiffusion\_PINN}
+\DocTitle{Module 2: Superconducting Low-Temperature and Nonequilibrium Physics}{Textbook-style derivation of BCS gap physics, quasiparticles, electron-phonon coupling, diffusion, recombination, trapping, and pair-breaking phonons}{Physics note for FEM\_BallisticDiffusion\_PINN}
 
 \begin{overviewbox}
-\textbf{Purpose.} This note explains how the transport model changes when the device is cooled from room temperature to superconducting-qubit operating temperature. The room-temperature heat-carrier picture remains useful, but superconductivity introduces a new energy scale, the superconducting energy gap, and a new failure-relevant carrier population: quasiparticles. The practical goal is to obtain reduced equations suitable for FEM simulation of quasiparticle poisoning and trap/heat-sink design.
+\textbf{Purpose.} Module 2 is the physics core of the superconducting-device part of this project. Module 1 provides the ballistic-diffusive heat-transport foundation. Module 3 discretizes the device geometry with FEM. Module 4 builds a physics-informed surrogate. Module 2 answers the question: \emph{what material and source physics should those transport equations contain when the device is a superconducting quantum circuit?}
+
+This note is intentionally written as a self-contained mini-textbook. It starts from electrons in a metal, Fermi energy, phonons, and electron-phonon attraction; derives the BCS gap equation and quasiparticle spectrum; derives the equilibrium quasiparticle density; then reduces the microscopic physics into FEM-ready diffusion-reaction-trapping equations and Rothwarf-Taylor nonequilibrium rate equations. The intended reader may know calculus, differential equations, and basic quantum mechanics, but does not need previous superconductivity or solid-state-physics training.
 \end{overviewbox}
 
 \ProjectTOC
 
 \SymbolsAcronymsSection
 \begin{symtable}
-BCS & Bardeen-Cooper-Schrieffer theory & Microscopic theory of conventional superconductivity based on Cooper pairing. \\
-$T_c$ & Critical temperature & Temperature below which a material becomes superconducting. \\
-$T$ & Temperature & Local or bath temperature. \\
-$\Delta(T)$ & Superconducting energy gap & Minimum quasiparticle excitation energy scale in a conventional superconductor. \\
-$\Delta_0$ & Zero-temperature gap & Approximate value of $\Delta(T)$ as $T\to0$. \\
-$N_0$ & Normal-state density of states & Single-spin electronic density of states at the Fermi level, depending on convention. \\
-$n_{\qp}$ & Quasiparticle density & Density of broken-pair excitations in the superconducting film. \\
-$n_{\qp}^{\mathrm{eq}}$ & Equilibrium quasiparticle density & Thermal-equilibrium quasiparticle density predicted by the gap and temperature. \\
-$D_{\qp}$ & Quasiparticle diffusion coefficient & Effective spatial diffusion coefficient for quasiparticles. \\
-$R$ & Recombination coefficient & Coefficient for two-quasiparticle recombination into a Cooper pair. \\
-$\Gamma_{\mathrm{trap}}$ & Trap removal rate & Position-dependent quasiparticle removal rate due to normal-metal traps or engineered sinks. \\
-$S_{\qp}$ & Quasiparticle source & Generation rate density from photons, phonons, heating, or other nonequilibrium events. \\
-$C_s$ & Superconducting heat capacity & Electronic heat capacity in the superconducting state. \\
-$k_s$ & Superconducting thermal conductivity & Effective thermal conductivity in the superconducting state. \\
-$\Omega_{\JJ}$ & Junction-sensitive region & Effective volume around the Josephson junction where quasiparticles are most harmful. \\
-JJ & Josephson junction & Weak link between superconductors that provides nonlinearity to a superconducting qubit. \\
-QP & Quasiparticle & Excitation formed when Cooper-pair condensate order is locally broken or excited. \\
+BCS & Bardeen-Cooper-Schrieffer theory & Microscopic theory of conventional superconductivity based on attractive pairing of electrons near the Fermi surface. \\
+$\br$ & Position vector & Spatial point in the device geometry. \\
+$\bk,\bq$ & Wave vectors & Electron and phonon wave-vector labels in reciprocal space. \\
+$\hbar$ & Reduced Planck constant & Quantum conversion between angular frequency and energy. \\
+$e$ & Elementary charge magnitude & Magnitude of electron charge; electron charge is $-e$. \\
+$\kB$ & Boltzmann constant & Conversion between temperature and thermal energy. \\
+$E_F$ & Fermi energy & Energy of the highest occupied state at $T=0$ for a normal Fermi gas. \\
+$\mu$ & Chemical potential & Thermodynamic energy cost for adding one particle; near $E_F$ at low temperature. \\
+$\xi_\bk$ & Single-particle energy relative to $\mu$ & $\xi_\bk=\eps_\bk-\mu$. \\
+$N(0)$ or $N_0$ & Density of states at Fermi level & Electronic density of states near $E_F$; convention may be single spin or both spins. \\
+$T_c$ & Critical temperature & Temperature below which the superconducting state is stable. \\
+$\Delta(T)$ & Superconducting gap parameter & BCS order-parameter amplitude; also sets the minimum quasiparticle excitation energy. \\
+$\Delta_0$ & Zero-temperature gap & $\Delta(T\to0)$. In weak-coupling BCS, $\Delta_0\approx1.764\kB T_c$. \\
+$u_\bk,v_\bk$ & BCS coherence factors & Amplitudes for empty and pair-occupied components of a time-reversed state pair. \\
+$E_\bk$ & Bogoliubov quasiparticle energy & $E_\bk=\sqrt{\xi_\bk^2+\Delta^2}$. \\
+$N_s(E)$ & Superconducting density of states & Gapped quasiparticle density of states. \\
+$n_{\qp}$ & Quasiparticle density & Number of quasiparticle excitations per unit volume. \\
+$n_{\qp}^{\eq}$ & Equilibrium quasiparticle density & Thermal-equilibrium value implied by $\Delta(T)$ and $T$. \\
+$D_{\qp}$ & Quasiparticle diffusion coefficient & Effective diffusion coefficient for spatial spreading of quasiparticles. \\
+$R$ & Recombination coefficient & Reduced two-quasiparticle recombination coefficient. \\
+$\Gamma_{\trap}$ & Trap removal rate & Volume sink rate for removal of quasiparticles by engineered traps. \\
+$s_{\trap}$ & Trap capture velocity & Robin-boundary sink coefficient at trap interfaces. \\
+$S_{\qp}$ & Quasiparticle source density & Generation rate density from photons, phonons, energetic particles, or local heating. \\
+$h\nu$ & Photon energy & Energy of a photon of frequency $\nu$. \\
+$2\Delta$ & Pair-breaking threshold & Minimum energy needed to create two quasiparticles from one Cooper pair. \\
+$N_{\Omega}$ & Pair-breaking phonon number & Lumped number of phonons energetic enough to break Cooper pairs. \\
+$n_{\Omega}$ & Pair-breaking phonon density & Spatial density of pair-breaking phonons. \\
+$\beta$ & Pair-breaking rate coefficient & Rate for pair-breaking phonons to generate quasiparticles. \\
+$\tau_R$ & Recombination time & Characteristic relaxation time of quasiparticle excess density. \\
+$\tau_B$ & Pair-breaking time & Characteristic time for high-energy phonons to break Cooper pairs. \\
+$\tau_{\esc}$ & Phonon escape time & Characteristic time for pair-breaking phonons to leave the film or enter a sink/substrate. \\
+$\Sigma$ & Electron-phonon coefficient & Reduced coefficient in low-temperature electron-phonon energy-transfer laws. \\
+$T_e,T_{ph}$ & Electron and phonon temperatures & Effective subsystem temperatures in a two-temperature approximation. \\
+$C_e,C_{ph}$ & Heat capacities & Electron/quasiparticle and phonon heat capacities. \\
+$k_e,k_{ph}$ & Thermal conductivities & Electron/quasiparticle and phonon thermal conductivities. \\
+RT & Rothwarf-Taylor model & Coupled nonequilibrium rate equations for quasiparticles and pair-breaking phonons. \\
+JJ & Josephson junction & Weak link between superconductors; the most quasiparticle-sensitive region in a transmon. \\
+QP & Quasiparticle & Elementary excitation of a superconductor; physically, a mixture of electron-like and hole-like character. \\
 \end{symtable}
 
-\section{Why cooling changes the physics}
-At room temperature, electrons and phonons can often be modeled as heat carriers whose energy density and flux can be connected to temperature, conductivity, and mean free path. At superconducting-qubit temperatures, the electronic system is no longer a normal metal. A macroscopic condensate of Cooper pairs forms, and single-particle excitations require energy at least on the order of the superconducting energy gap $\Delta$.
+\section{Module 2 in the full project}
 
-This changes the modeling target. The design question is not only how to move heat away. It is also how to reduce the density of nonequilibrium quasiparticles near the Josephson junction. A small number of quasiparticles in the wrong place can matter because they can tunnel across the junction, change parity, introduce loss, and disrupt qubit operation.
-
-\section{Minimal BCS energy scale}
-For a conventional weak-coupling BCS superconductor, the zero-temperature gap is approximately
+\subsection{What Module 2 must provide}
+The project is organized around the following modeling chain:
 \begin{equation}
-\Delta_0 \approx 1.764\,\kB T_c.
-\label{eq:bcs_gap_zero}
+\text{energy deposition and heat transport}
+\quad\Rightarrow\quad
+\text{superconducting material response}
+\quad\Rightarrow\quad
+\text{device-scale FEM}
+\quad\Rightarrow\quad
+\text{PINN surrogate}.
 \end{equation}
-A commonly used interpolation for the temperature dependence is
-\begin{equation}
-\Delta(T) \approx \Delta_0\tanh\left[1.74\sqrt{\frac{T_c}{T}-1}\right],\qquad 0<T<T_c.
-\label{eq:bcs_gap_interp}
-\end{equation}
-This formula is not the full self-consistent BCS gap equation, but it is useful for engineering-level reduced modeling.
+Module 1 supplies the heat-transport vocabulary: ballistic versus diffusive carriers, finite propagation effects, boundary scattering, and temperature fields. Module 3 takes governing equations and discretizes them on a transmon-like geometry. Module 4 learns a fast surrogate while preserving physics residuals. Module 2 sits between these pieces. It converts microscopic superconducting ideas into reduced PDEs and source/sink terms.
 
-The key physical point is exponential suppression. At temperatures well below $T_c$, thermal quasiparticles are rare because creating them costs energy $\Delta$.
+For this project, Module 2 should answer five concrete questions:
+\begin{enumerate}[leftmargin=1.6em]
+    \item What energy scale protects the superconducting state?
+    \item What are quasiparticles, and why are they harmful near a Josephson junction?
+    \item How are quasiparticles generated by deposited energy, photons, and high-energy phonons?
+    \item How do quasiparticles move, recombine, and get trapped?
+    \item Which reduced equations are accurate enough for first FEM/PINN implementation while still traceable to first-principles physics?
+\end{enumerate}
 
-\section{Equilibrium quasiparticle density}
-For $\kB T\ll \Delta$, the equilibrium quasiparticle density has the approximate asymptotic form
+The final FEM-ready output of this note is not a full microscopic BCS kinetic solver. That would require energy-resolved distribution functions, material-specific electron-phonon kernels, and detailed interface spectral functions. Instead, the output is a hierarchy. At the simplest level, use a scalar quasiparticle density $n_{\qp}(\br,t)$ with diffusion, recombination, trap removal, and source terms. At the next level, couple $n_{\qp}$ to pair-breaking phonons $n_{\Omega}(\br,t)$. At the highest level planned here, connect those equations to temperature fields and energy deposition.
+
+\subsection{A warning about ``first principles''}
+A true first-principles calculation of a superconducting device would start from electrons and ions interacting electromagnetically, solve the many-body quantum problem, and then derive an effective low-energy device theory. That is impossible for an engineering-scale transmon geometry. The practical meaning of ``derive from first principles'' in this note is more specific:
+\begin{itemize}[leftmargin=1.6em]
+    \item start from conservation laws, quantum statistics, and standard many-body Hamiltonians;
+    \item show where the gap, quasiparticles, and pair-breaking threshold come from;
+    \item identify every approximation used to reduce microscopic physics to PDEs;
+    \item produce equations with terms whose units, signs, and limiting behavior are physically transparent.
+\end{itemize}
+This is the right level for a computational physics project: not purely phenomenological, but not pretending to solve every atom in the chip.
+
+\section{Normal-metal starting point: electrons before superconductivity}
+
+\subsection{Free electrons in a box}
+Before superconductivity, consider a simple metal. The simplest model treats conduction electrons as quantum particles moving through a periodic solid but ignores the detailed periodic potential. Put electrons in a cubic box of volume $V=L^3$ with periodic boundary conditions. The allowed wave functions are plane waves,
 \begin{equation}
-n_{\qp}^{\mathrm{eq}}(T)\approx 2N_0\sqrt{2\pi \kB T\Delta(T)}\,\exp\left[-\frac{\Delta(T)}{\kB T}\right].
-\label{eq:eq_qp_density}
+\psi_{\bk}(\br)=\frac{1}{\sqrt{V}}e^{i\bk\cdot\br},
 \end{equation}
-The exponential factor is the dominant physics. A small reduction in $\Delta/\kB T$ can strongly increase the thermal quasiparticle population.
+where the allowed wave vectors are
+\begin{equation}
+\bk=\frac{2\pi}{L}(n_x,n_y,n_z),\qquad n_x,n_y,n_z\in\mathbb{Z}.
+\end{equation}
+The energy of a free electron state is
+\begin{equation}
+\eps_{\bk}=\frac{\hbar^2 k^2}{2m},
+\end{equation}
+where $m$ is the electron mass or, in a band-structure approximation, an effective mass $m^*$.
+
+Electrons are fermions. The Pauli exclusion principle allows at most one electron per quantum state per spin. Because each momentum state has two spin states, the ground state at $T=0$ is obtained by filling all states from $k=0$ outward until all electrons are used. The boundary of the filled region in $\bk$-space is the \emph{Fermi surface}. For an isotropic free-electron gas it is a sphere of radius $k_F$.
+
+The number of states inside a sphere of radius $k_F$ is
+\begin{equation}
+N_e=2\frac{V}{(2\pi)^3}\frac{4\pi k_F^3}{3},
+\end{equation}
+where the factor 2 is spin. Therefore the electron number density $n_e=N_e/V$ is
+\begin{equation}
+ n_e=\frac{k_F^3}{3\pi^2},\qquad
+ k_F=(3\pi^2 n_e)^{1/3}.
+\end{equation}
+The Fermi energy is
+\begin{equation}
+ E_F=\frac{\hbar^2 k_F^2}{2m^*}.
+\end{equation}
+This is not a band gap. It is the energy of the highest occupied electron state at zero temperature, measured from the chosen bottom of the band.
 
 \begin{physicsbox}
-\textbf{Interpretation.} In an ideal cold superconductor, the thermal quasiparticle density should be exponentially small. If experiments observe more quasiparticles than Eq.~\eqref{eq:eq_qp_density} predicts, that is evidence for nonequilibrium generation: stray photons, cosmic/radiation events, phonon bursts, substrate heating, imperfect shielding, or other environmental couplings.
+\textbf{Physical picture.} At low temperature, a metal is not a dilute gas in which all electrons are thermally wandering from rest. The electron sea is already filled up to $E_F$. Only electrons within an energy window of order $\kB T$ around the Fermi surface can easily change occupation, because deeper states are blocked by the Pauli principle.
 \end{physicsbox}
 
-\section{Reduced quasiparticle transport equation}
-The first FEM-ready quasiparticle model is a diffusion-reaction-trapping equation:
+\subsection{Fermi-Dirac distribution}
+At nonzero temperature, state occupation is described by the Fermi-Dirac distribution
+\begin{equation}
+ f(E)=\frac{1}{e^{(E-\mu)/(\kB T)}+1},
+\end{equation}
+where $\mu$ is the chemical potential. At $T=0$, this becomes a step function:
+\begin{equation}
+ f(E)=\begin{cases}
+1,& E<E_F,\\
+0,& E>E_F.
+\end{cases}
+\end{equation}
+At low temperature, $\mu\approx E_F$ for a normal metal. The derivative
+\begin{equation}
+ -\frac{\partial f}{\partial E}=\frac{1}{4\kB T}\sech^2\left(\frac{E-\mu}{2\kB T}\right)
+\end{equation}
+is strongly peaked near $E=\mu$. This is why many low-temperature electronic properties depend mainly on the density of states at the Fermi level.
+
+\subsection{Density of states near the Fermi level}
+The density of states counts how many single-particle states are available per energy interval. For a three-dimensional free-electron gas including both spins,
+\begin{equation}
+N(E)=\frac{V}{2\pi^2}\left(\frac{2m^*}{\hbar^2}\right)^{3/2}\sqrt{E}.
+\end{equation}
+Per unit volume, write $\nu(E)=N(E)/V$. Near the Fermi level, the energy dependence over the superconducting scale is weak, so one often approximates
+\begin{equation}
+ \nu(E)\approx \nu(E_F)\equiv N_0.
+\end{equation}
+Different superconductivity references define $N_0$ either per spin or including both spins. This note states the convention whenever a factor of 2 matters. For reduced FEM modeling, the essential point is that $N_0$ converts an energy interval near the Fermi surface into a density of electronic states.
+
+\subsection{Why normal-metal intuition is insufficient}
+In a normal metal, a weak electric field produces dissipative current because electrons scatter from impurities, phonons, surfaces, and other excitations. Heat transport can often be modeled by Fourier-like diffusion or by a Boltzmann equation. In a superconductor, below $T_c$, DC resistance vanishes in the ideal state because the electronic ground state is not a gas of independent electrons. It is a phase-coherent condensate of paired electrons. Excitations still exist, but their spectrum is gapped. That gap changes thermal conductivity, heat capacity, absorption, and the density of mobile dissipative carriers.
+
+\section{Lattice vibrations and electron-phonon interaction}
+
+\subsection{Ions as coupled oscillators}
+A crystal is not a rigid background. Ions vibrate around equilibrium positions. In the harmonic approximation, write the displacement of ion $j$ from equilibrium as $\bu_j$. The potential energy can be expanded as
+\begin{equation}
+ U=U_0+\frac{1}{2}\sum_{ij}\bu_i\cdot \Phi_{ij}\bu_j+\cdots,
+\end{equation}
+where $\Phi_{ij}$ is a force-constant matrix. Diagonalizing this coupled oscillator problem gives normal modes. After quantization, the energy of a mode with wave vector $\bq$ and branch $\lambda$ is
+\begin{equation}
+ E_{\bq\lambda}=\hbar\omega_{\bq\lambda}\left(n_{\bq\lambda}+\frac{1}{2}\right),
+\end{equation}
+where $n_{\bq\lambda}=0,1,2,\ldots$ is the phonon occupation number. A phonon is a quantum of lattice vibration.
+
+For acoustic phonons at long wavelength,
+\begin{equation}
+ \omega_{\bq\lambda}\approx v_{s,\lambda}|\bq|,
+\end{equation}
+where $v_s$ is a sound velocity. The phonon group velocity is $\nabla_\bq\omega$, not the speed of individual ions. The ions oscillate locally; the wave packet transports energy.
+
+\subsection{How electron-phonon coupling arises}
+Electrons move in a potential created by ions. If an ion moves, the electronic potential changes. Let $V_{\mathrm{ion}}(\br-\bR_j)$ be the potential due to ion $j$ at equilibrium position $\bR_j$. With displacement $\bu_j$,
+\begin{equation}
+ V_{\mathrm{ion}}(\br-\bR_j-\bu_j)
+ \approx V_{\mathrm{ion}}(\br-\bR_j)-\bu_j\cdot\nabla V_{\mathrm{ion}}(\br-\bR_j).
+\end{equation}
+The first term gives the static band structure. The second term couples electron density to ionic displacement. In second-quantized notation, a standard reduced electron-phonon Hamiltonian is
+\begin{equation}
+H_{e-ph}=\sum_{\bk,\bq,\sigma}g_{\bq}\,c_{\bk+\bq,\sigma}^{\dagger}c_{\bk\sigma}
+\left(a_{\bq}+a_{-\bq}^{\dagger}\right),
+\end{equation}
+where $c_{\bk\sigma}^{\dagger}$ creates an electron and $a_{\bq}^{\dagger}$ creates a phonon. The coefficient $g_{\bq}$ encodes deformation potential, screening, mode normalization, and material details.
+
+This Hamiltonian says that an electron can scatter from momentum $\bk$ to $\bk+\bq$ by absorbing or emitting a phonon. At ordinary temperatures, this contributes to electrical and thermal resistance. At low temperatures, the same interaction also provides the microscopic attraction that enables conventional superconductivity.
+
+\subsection{Why phonons can mediate attraction between electrons}
+Electrons repel through Coulomb interaction. Superconductivity in conventional materials appears paradoxical because electrons pair despite this repulsion. The resolution is retardation and screening. A moving electron slightly distorts the positive ionic lattice. Because ions are heavy, the distortion persists for a short time compared with electronic motion. A second electron can be attracted to this positive distortion. The effective interaction between two electrons can therefore become attractive in a narrow energy shell around the Fermi surface.
+
+One schematic effective interaction is
+\begin{equation}
+ V_{\mathrm{eff}}(\bk,\bk')\approx
+ \begin{cases}
+ -V, & |\xi_\bk|<\hbar\omega_D,\ |\xi_{\bk'}|<\hbar\omega_D,\\
+ 0, & \text{otherwise},
+ \end{cases}
+\end{equation}
+where $V>0$ denotes the magnitude of attraction, $\omega_D$ is a Debye frequency scale, and
+\begin{equation}
+\xi_\bk=\eps_\bk-\mu.
+\end{equation}
+The shell restriction matters: phonons do not strongly couple electron states separated by arbitrary electronic energies; the phonon energy scale is much smaller than $E_F$.
+
+\begin{notebox}
+\textbf{Important distinction.} BCS theory does include electron-phonon interaction in conventional superconductors, but the standard BCS Hamiltonian uses it only after reducing it to an effective attraction between time-reversed electron states. It does not automatically model every nonequilibrium electron-phonon relaxation process after radiation or photon absorption. That nonequilibrium part requires additional kinetic or rate equations, which we derive later.
+\end{notebox}
+
+\section{Cooper instability: why an arbitrarily weak attraction matters}
+
+\subsection{The two-electron problem above a Fermi sea}
+The first hint of superconductivity is the Cooper problem. Imagine a filled Fermi sea plus two extra electrons above the Fermi surface. Suppose these two electrons feel a weak attractive interaction only in a shell $0<\xi_\bk<\hbar\omega_D$. Consider a pair with total momentum zero: one electron in $\bk\uparrow$, the other in $-\bk\downarrow$. A trial pair state is
+\begin{equation}
+\ket{\Psi}=\sum_{\bk}a_\bk c_{\bk\uparrow}^{\dagger}c_{-\bk\downarrow}^{\dagger}\ket{F},
+\end{equation}
+where $\ket{F}$ is the filled Fermi sea. The Schrodinger equation for the coefficients becomes
+\begin{equation}
+(2\xi_\bk-E)a_\bk=V\sum_{\bk'}a_{\bk'},
+\end{equation}
+where $E$ is the pair energy measured relative to $2E_F$ and the attractive interaction is $-V$.
+
+Rearrange:
+\begin{equation}
+ a_\bk=\frac{V C}{2\xi_\bk-E},\qquad C=\sum_{\bk'}a_{\bk'}.
+\end{equation}
+Summing over $\bk$ gives
+\begin{equation}
+ 1=V\sum_{\bk}\frac{1}{2\xi_\bk-E}.
+\end{equation}
+Replace the sum by an integral using a constant density of states per spin $N_0$:
+\begin{equation}
+1=V N_0\int_0^{\hbar\omega_D}\frac{d\xi}{2\xi-E}.
+\end{equation}
+A bound state has $E<0$. Write $E=-E_b$ with $E_b>0$:
+\begin{equation}
+1=V N_0\int_0^{\hbar\omega_D}\frac{d\xi}{2\xi+E_b}
+=\frac{V N_0}{2}\ln\left(\frac{2\hbar\omega_D+E_b}{E_b}\right).
+\end{equation}
+For weak attraction, $E_b\ll\hbar\omega_D$, so
+\begin{equation}
+E_b\approx 2\hbar\omega_D\exp\left(-\frac{2}{N_0V}\right).
+\end{equation}
+The exact numerical prefactor is model-dependent, but the main result is robust: any attractive interaction, no matter how weak, creates a bound pair because the Fermi surface provides a large phase space degeneracy.
+
+\subsection{What the Cooper problem does and does not prove}
+The Cooper problem proves an instability of the normal Fermi sea. It does not yet give a macroscopic superconducting condensate, a gap equation, or the Josephson effect. For that, one needs a many-pair theory. BCS theory supplies the many-body ground state and its excitations.
+
+The pair is not usually a small molecule in real space. In weak-coupling superconductors, the coherence length can be much larger than the lattice spacing. Many Cooper pairs overlap strongly. The condensate is therefore better understood as a coherent many-body quantum state than as separate little electron molecules.
+
+\section{BCS Hamiltonian and variational ground state}
+
+\subsection{Reduced BCS Hamiltonian}
+The reduced BCS Hamiltonian keeps the normal electron energy and an effective attraction between time-reversed states:
+\begin{equation}
+H=\sum_{\bk,\sigma}\xi_\bk c_{\bk\sigma}^{\dagger}c_{\bk\sigma}
+-\sum_{\bk,\bk'}V_{\bk\bk'}c_{\bk\uparrow}^{\dagger}c_{-\bk\downarrow}^{\dagger}c_{-\bk'\downarrow}c_{\bk'\uparrow}.
+\end{equation}
+The pair creation operator is
+\begin{equation}
+ b_\bk^{\dagger}=c_{\bk\uparrow}^{\dagger}c_{-\bk\downarrow}^{\dagger}.
+\end{equation}
+Then the interaction is roughly $-\sum_{\bk\bk'}V_{\bk\bk'}b_\bk^{\dagger}b_{\bk'}$: it scatters a pair from $(\bk,-\bk)$ to $(\bk',-\bk')$.
+
+The pairing of time-reversed states is not arbitrary. It gives zero total momentum and opposite spin in the simplest $s$-wave case. This creates a spatially uniform condensate and a spin singlet. More complex superconductors can have different pairing symmetries, but aluminum transmon circuits are usually modeled as conventional $s$-wave superconductors.
+
+\subsection{BCS variational wave function}
+The BCS ground state is
+\begin{equation}
+\ket{\mathrm{BCS}}=\prod_{\bk}\left(u_\bk+v_\bk c_{\bk\uparrow}^{\dagger}c_{-\bk\downarrow}^{\dagger}\right)\ket{0},
+\end{equation}
+with normalization
+\begin{equation}
+ |u_\bk|^2+|v_\bk|^2=1.
+\end{equation}
+For each pair of states $(\bk\uparrow,-\bk\downarrow)$, the factor says: the pair state is in a quantum superposition of empty and occupied. This is not a state with a fixed number of particles, but it is an excellent thermodynamic-limit description. Number-conserving formulations exist and lead to the same measurable results.
+
+The quantity
+\begin{equation}
+ \langle c_{-\bk\downarrow}c_{\bk\uparrow}\rangle=u_\bk v_\bk^*
+\end{equation}
+is the anomalous pair amplitude. It is nonzero in the superconducting state. The phase of this complex amplitude is the macroscopic superconducting phase that later appears in Josephson physics.
+
+\subsection{Mean-field definition of the gap}
+Define the gap parameter
+\begin{equation}
+ \Delta_\bk=-\sum_{\bk'}V_{\bk\bk'}\langle c_{-\bk'\downarrow}c_{\bk'\uparrow}\rangle.
+\end{equation}
+For an isotropic $s$-wave superconductor, $\Delta_\bk=\Delta$ in the active shell. In mean-field theory, the interaction term is approximated by replacing pair operators with their average plus fluctuations and neglecting quadratic fluctuation terms. This gives
+\begin{equation}
+H_{\mathrm{MF}}=\sum_{\bk}\left[
+\xi_\bk(c_{\bk\uparrow}^{\dagger}c_{\bk\uparrow}+c_{-\bk\downarrow}^{\dagger}c_{-\bk\downarrow})
+-\Delta c_{\bk\uparrow}^{\dagger}c_{-\bk\downarrow}^{\dagger}
+-\Delta^* c_{-\bk\downarrow}c_{\bk\uparrow}
+\right]+\frac{|\Delta|^2}{V}.
+\end{equation}
+This Hamiltonian contains terms that create and destroy pairs. That is the mathematical signature of a condensate: the ground state is not an eigenstate of individual electron number in each pair state.
+
+\section{Bogoliubov quasiparticles and the superconducting gap}
+
+\subsection{Diagonalizing the mean-field Hamiltonian}
+For simplicity take $\Delta$ real and positive. Introduce the Nambu spinor
+\begin{equation}
+\Psi_\bk=\begin{pmatrix}c_{\bk\uparrow}\\ c_{-\bk\downarrow}^{\dagger}\end{pmatrix}.
+\end{equation}
+Ignoring constants, the mean-field Hamiltonian for each $\bk$ can be written
+\begin{equation}
+H_\bk=\Psi_\bk^{\dagger}
+\begin{pmatrix}
+\xi_\bk & -\Delta\\
+-\Delta & -\xi_\bk
+\end{pmatrix}
+\Psi_\bk.
+\end{equation}
+The eigenvalues of the $2\times2$ matrix satisfy
+\begin{equation}
+\det\begin{pmatrix}
+\xi_\bk-E & -\Delta\\
+-\Delta & -\xi_\bk-E
+\end{pmatrix}=0.
+\end{equation}
+Compute the determinant:
+\begin{equation}
+(\xi_\bk-E)(-\xi_\bk-E)-\Delta^2=E^2-\xi_\bk^2-\Delta^2=0.
+\end{equation}
+Therefore
+\begin{equation}
+ E_\bk=\sqrt{\xi_\bk^2+\Delta^2}.
+\end{equation}
+This is the Bogoliubov quasiparticle spectrum. The minimum excitation energy occurs at $\xi_\bk=0$, meaning at the Fermi surface:
+\begin{equation}
+E_{\min}=\Delta.
+\end{equation}
+Thus $\Delta$ is the minimum energy required to create one quasiparticle excitation.
+
+\subsection{Coherence factors}
+The transformation from electron operators to quasiparticle operators is
+\begin{equation}
+\gamma_{\bk\uparrow}=u_\bk c_{\bk\uparrow}-v_\bk c_{-\bk\downarrow}^{\dagger},
+\end{equation}
+\begin{equation}
+\gamma_{-\bk\downarrow}^{\dagger}=v_\bk c_{\bk\uparrow}+u_\bk c_{-\bk\downarrow}^{\dagger}.
+\end{equation}
+The coefficients are chosen so that the Hamiltonian is diagonal and the quasiparticle operators obey fermionic anticommutation rules. The result is
+\begin{equation}
+ u_\bk^2=\frac{1}{2}\left(1+\frac{\xi_\bk}{E_\bk}\right),
+ \qquad
+ v_\bk^2=\frac{1}{2}\left(1-\frac{\xi_\bk}{E_\bk}\right),
+\end{equation}
+and
+\begin{equation}
+ u_\bk v_\bk=\frac{\Delta}{2E_\bk}.
+\end{equation}
+Deep below the Fermi surface, $\xi_\bk\ll-\Delta$, so $v_\bk^2\approx1$ and the state is mostly occupied. Far above the Fermi surface, $u_\bk^2\approx1$ and the state is mostly empty. Near the Fermi surface, $u_\bk^2\approx v_\bk^2\approx1/2$; the state is strongly mixed. Pairing smears the sharp Fermi surface over an energy scale set by $\Delta$.
+
+\subsection{Quasiparticles are not just ordinary electrons}
+A Bogoliubov quasiparticle is a coherent mixture of electron-like and hole-like character. Its charge expectation can depend on $\xi_\bk/E_\bk$, and near the gap edge it is not simply an electron moving above an inert background. This matters for tunneling and dissipation in Josephson devices.
+
+For reduced transport, however, we usually track the scalar density $n_{\qp}$. This throws away energy, spin, charge imbalance, and coherence-factor details. That reduction is acceptable for the first device-scale model only if the dominant engineering goal is spatial mitigation of excess quasiparticles, not prediction of detailed tunneling spectra.
+
+\section{Deriving the BCS gap equation}
+
+\subsection{Self-consistency condition}
+From the definition of $\Delta$ and the BCS ground-state expectation value,
+\begin{equation}
+\Delta=V\sum_{\bk}u_\bk v_\bk
+\end{equation}
+for a constant attractive interaction $V$ in the Debye shell. Using $u_\bk v_\bk=\Delta/(2E_\bk)$,
+\begin{equation}
+\Delta=V\sum_{\bk}\frac{\Delta}{2E_\bk}.
+\end{equation}
+For a nonzero superconducting solution, divide by $\Delta$:
+\begin{equation}
+1=V\sum_{\bk}\frac{1}{2\sqrt{\xi_\bk^2+\Delta^2}}.
+\end{equation}
+Replace the sum by an integral with single-spin density of states $N_0$:
+\begin{equation}
+1=V N_0\int_0^{\hbar\omega_D}\frac{d\xi}{\sqrt{\xi^2+\Delta^2}}.
+\end{equation}
+The integral is
+\begin{equation}
+\int\frac{d\xi}{\sqrt{\xi^2+\Delta^2}}=\sinh^{-1}\left(\frac{\xi}{\Delta}\right).
+\end{equation}
+Thus
+\begin{equation}
+1=V N_0\sinh^{-1}\left(\frac{\hbar\omega_D}{\Delta_0}\right).
+\end{equation}
+In weak coupling, $\hbar\omega_D\gg\Delta_0$ and $\sinh^{-1}x\approx\ln(2x)$, so
+\begin{equation}
+1\approx V N_0\ln\left(\frac{2\hbar\omega_D}{\Delta_0}\right).
+\end{equation}
+Solving for $\Delta_0$ gives
+\begin{equation}
+\Delta_0\approx2\hbar\omega_D\exp\left(-\frac{1}{N_0V}\right).
+\label{eq:delta0_weak}
+\end{equation}
+This is one of the most important results in weak-coupling BCS theory. The gap is non-analytic in the coupling strength: a small attractive interaction produces an exponentially small but finite gap.
+
+\subsection{Finite temperature gap equation}
+At finite temperature, quasiparticle states can be thermally occupied. The anomalous average is reduced by the factor $1-2f(E_\bk)$, where
+\begin{equation}
+ f(E_\bk)=\frac{1}{e^{E_\bk/(\kB T)}+1}.
+\end{equation}
+The gap equation becomes
+\begin{equation}
+1=V\sum_\bk\frac{1-2f(E_\bk)}{2E_\bk}
+=V\sum_\bk\frac{\tanh\left(E_\bk/(2\kB T)\right)}{2E_\bk}.
+\end{equation}
+In integral form,
+\begin{equation}
+1=V N_0\int_0^{\hbar\omega_D}
+\frac{\tanh\left(\sqrt{\xi^2+\Delta(T)^2}/(2\kB T)\right)}
+{\sqrt{\xi^2+\Delta(T)^2}}\,d\xi.
+\label{eq:gap_eq_finiteT}
+\end{equation}
+This is the self-consistent BCS gap equation. It is implicit because $\Delta(T)$ appears inside the integral.
+
+\subsection{Critical temperature and the weak-coupling ratio}
+At $T=T_c$, the gap goes to zero. Set $\Delta=0$ in Eq.~\eqref{eq:gap_eq_finiteT}:
+\begin{equation}
+1=V N_0\int_0^{\hbar\omega_D}\frac{\tanh(\xi/(2\kB T_c))}{\xi}\,d\xi.
+\end{equation}
+In weak coupling, $\hbar\omega_D\gg\kB T_c$, and the integral evaluates approximately to
+\begin{equation}
+\int_0^{\hbar\omega_D}\frac{\tanh(\xi/(2\kB T_c))}{\xi}\,d\xi
+\approx \ln\left(\frac{1.14\hbar\omega_D}{\kB T_c}\right).
+\end{equation}
+Thus
+\begin{equation}
+\kB T_c\approx1.14\hbar\omega_D\exp\left(-\frac{1}{N_0V}\right).
+\end{equation}
+Divide Eq.~\eqref{eq:delta0_weak} by this result:
+\begin{equation}
+\frac{\Delta_0}{\kB T_c}\approx\frac{2}{1.14}\approx1.764.
+\end{equation}
+Equivalently,
+\begin{equation}
+2\Delta_0\approx3.528\kB T_c.
+\end{equation}
+This is the origin of the often quoted weak-coupling BCS gap ratio.
+
+\subsection{Engineering interpolation}
+For simulations, repeatedly solving Eq.~\eqref{eq:gap_eq_finiteT} may be unnecessary. A common interpolation is
+\begin{equation}
+\Delta(T)\approx\Delta_0\tanh\left[1.74\sqrt{\frac{T_c}{T}-1}\right],\qquad 0<T<T_c.
+\end{equation}
+This formula has the correct qualitative behavior: $\Delta\to\Delta_0$ as $T\to0$ and $\Delta\to0$ as $T\to T_c^-$. It is not the microscopic equation itself. In the MATLAB implementation, this interpolation is appropriate for first parameter sweeps, while the self-consistent integral can be added later if needed.
+
+\section{Meaning of the superconducting gap}
+
+\subsection{Gap parameter versus semiconductor band gap}
+The superconducting gap $\Delta$ is not the same thing as a semiconductor band gap. In a semiconductor, the band gap is the energy difference between the top of the valence band and the bottom of the conduction band. It is a single-particle band-structure gap created by the periodic lattice potential.
+
+In a BCS superconductor, the normal metal still has a Fermi surface. The gap opens in the excitation spectrum around the Fermi level because the many-body ground state is paired. The minimum energy to create one Bogoliubov quasiparticle is $\Delta$. Breaking a Cooper pair into two quasiparticles costs at least $2\Delta$.
+
+\begin{physicsbox}
+\textbf{Key correction.} The $\Delta$ used in superconducting qubit physics is not the energy from a valence-band maximum to a conduction-band minimum. It is the many-body excitation gap around the Fermi surface of a metal that has become superconducting.
+\end{physicsbox}
+
+\subsection{Why pair breaking costs $2\Delta$}
+A Cooper pair is part of the condensate. To create excitations from that condensate, the lowest-energy process creates two quasiparticles because electron parity must be conserved in ordinary pair breaking. Each quasiparticle has minimum energy $\Delta$. Therefore the minimum deposited energy needed for direct pair breaking is
+\begin{equation}
+E_{\mathrm{break}}\ge2\Delta.
+\end{equation}
+If a photon has $h\nu<2\Delta$, direct pair breaking is energetically forbidden in the ideal clean BCS picture. If $h\nu>2\Delta$, direct pair breaking is possible, although the efficiency depends on absorption, geometry, coherence factors, and subsequent energy relaxation.
+
+\subsection{The superconducting condensate as a phase-coherent state}
+The BCS state has a macroscopic phase. Write
+\begin{equation}
+\Delta=|\Delta|e^{i\phi}.
+\end{equation}
+The amplitude $|\Delta|$ sets the gap. The phase $\phi$ controls supercurrent and Josephson effects. In this Module 2 note, the main focus is $|\Delta|$ and quasiparticle generation. The phase becomes central when deriving Josephson junction equations, but quasiparticle poisoning couples to that physics because quasiparticles can tunnel across the junction and disturb the intended coherent dynamics.
+
+\section{Superconducting density of states}
+
+\subsection{Mapping normal states to quasiparticle energies}
+The normal-state energy relative to the chemical potential is $\xi$. The superconducting quasiparticle energy is
+\begin{equation}
+E=\sqrt{\xi^2+\Delta^2}.
+\end{equation}
+For $E\ge\Delta$,
+\begin{equation}
+\xi=\pm\sqrt{E^2-\Delta^2}.
+\end{equation}
+The density of states transforms according to conservation of the number of states:
+\begin{equation}
+N_s(E)dE=N_n(\xi)d\xi.
+\end{equation}
+Taking the magnitude of the derivative,
+\begin{equation}
+\left|\frac{d\xi}{dE}\right|=\frac{E}{\sqrt{E^2-\Delta^2}}.
+\end{equation}
+Assuming the normal density of states is constant near $E_F$, the superconducting density of states becomes
+\begin{equation}
+N_s(E)=N_0\frac{|E|}{\sqrt{E^2-\Delta^2}},\qquad |E|>\Delta,
+\end{equation}
+and
+\begin{equation}
+N_s(E)=0,\qquad |E|<\Delta.
+\end{equation}
+The divergence at $E=\Delta$ is the BCS coherence peak. In real materials it is broadened by finite lifetime, disorder, inelastic scattering, and measurement resolution.
+
+\subsection{Why the density of states matters for quasiparticle density}
+To count thermally excited quasiparticles, integrate the quasiparticle density of states times the Fermi occupation probability. Using a both-spin convention for $N_0$ can change prefactors, but the structure is
+\begin{equation}
+ n_{\qp}^{\eq}=2\int_{\Delta}^{\infty}N_s(E)f(E)\,dE.
+\end{equation}
+The factor 2 here is often used for spin when $N_0$ is single-spin. What matters most at low temperature is the exponential dependence from $f(E)$.
+
+\section{Deriving the equilibrium quasiparticle density}
+
+\subsection{Low-temperature asymptotic evaluation}
+At low temperature $\kB T\ll\Delta$, the Fermi factor for positive quasiparticle energy is approximately Boltzmann:
+\begin{equation}
+ f(E)=\frac{1}{e^{E/(\kB T)}+1}\approx e^{-E/(\kB T)}.
+\end{equation}
+The integral is dominated by energies just above the gap. Let
+\begin{equation}
+E=\Delta+\epsilon,\qquad \epsilon\ll\Delta.
+\end{equation}
+Then
+\begin{equation}
+E^2-\Delta^2=(\Delta+\epsilon)^2-\Delta^2=2\Delta\epsilon+\epsilon^2\approx2\Delta\epsilon.
+\end{equation}
+Also $E\approx\Delta$ in the numerator, so
+\begin{equation}
+\frac{E}{\sqrt{E^2-\Delta^2}}\approx\sqrt{\frac{\Delta}{2\epsilon}}.
+\end{equation}
+The equilibrium density becomes
+\begin{equation}
+ n_{\qp}^{\eq}\approx 2N_0\int_0^{\infty}\sqrt{\frac{\Delta}{2\epsilon}}
+ e^{-(\Delta+\epsilon)/(\kB T)}\,d\epsilon.
+\end{equation}
+Pull out the gap exponential:
+\begin{equation}
+ n_{\qp}^{\eq}\approx2N_0e^{-\Delta/(\kB T)}\sqrt{\frac{\Delta}{2}}
+ \int_0^{\infty}\epsilon^{-1/2}e^{-\epsilon/(\kB T)}\,d\epsilon.
+\end{equation}
+Use the Gamma-function identity
+\begin{equation}
+\int_0^{\infty}\epsilon^{-1/2}e^{-\epsilon/(\kB T)}d\epsilon
+=\sqrt{\pi\kB T}.
+\end{equation}
+Therefore
+\begin{equation}
+ n_{\qp}^{\eq}(T)\approx 2N_0\sqrt{\frac{\pi\Delta\kB T}{2}}e^{-\Delta/(\kB T)}.
+\end{equation}
+Depending on the convention for $N_0$ and whether electron-like and hole-like branches are counted separately, this is commonly written as
+\begin{equation}
+ n_{\qp}^{\eq}(T)\approx 2N_0\sqrt{2\pi\kB T\Delta(T)}\exp\left[-\frac{\Delta(T)}{\kB T}\right].
+\label{eq:neq_final}
+\end{equation}
+The prefactor convention is less important than the exponential. The density changes by orders of magnitude when $\Delta/(\kB T)$ changes modestly.
+
+\subsection{Why excess quasiparticles are diagnostically important}
+If a device operated far below $T_c$ contains many more quasiparticles than Eq.~\eqref{eq:neq_final} predicts, those quasiparticles are not simply thermal equilibrium excitations. They are nonequilibrium quasiparticles. Candidate sources include stray infrared radiation, microwave leakage, cosmic rays, radioactive decays, substrate phonon bursts, imperfect shielding, local dielectric loss, vortex motion, or previous high-energy events. The FEM/PINN project does not need to identify every source at once. It needs a source term $S_{\qp}(\br,t)$ flexible enough to represent them.
+
+\section{Heat capacity and thermal conductivity in the superconducting state}
+
+\subsection{Electronic heat capacity}
+The electronic heat capacity measures how much the electronic energy changes with temperature. In a normal metal at low temperature,
+\begin{equation}
+ C_{e,n}=\gamma T,
+\end{equation}
+where $\gamma$ is proportional to the density of states at the Fermi level. This linear law occurs because only electrons within about $\kB T$ of the Fermi surface can be thermally excited.
+
+In a superconductor at $T\ll T_c$, electronic excitations are exponentially suppressed. A rough low-temperature form is
+\begin{equation}
+ C_{e,s}(T)\propto \exp\left[-\frac{\Delta}{\kB T}\right]
+\end{equation}
+up to algebraic prefactors. This matters for thermal spikes: the electronic subsystem can have a very small heat capacity, so a small deposited energy can produce a large effective electronic temperature if the energy initially remains electronic.
+
+\subsection{Thermal conductivity}
+In a normal metal, electrons often dominate thermal conductivity. In a superconductor, the condensate carries charge supercurrent but does not carry entropy in the same way normal excitations do. Heat is carried by quasiparticles and phonons. The quasiparticle contribution is suppressed at low temperature because quasiparticles are rare:
+\begin{equation}
+ k_{e,s}(T)\sim k_{e,n}(T)\,F_k(T),
+\end{equation}
+where a first engineering model might use
+\begin{equation}
+ F_k(T)=\exp\left[-\frac{\Delta(T)}{\kB T}\right].
+\end{equation}
+This is not a precision formula. It is a reduced coefficient model for initial geometry sweeps. More accurate formulas require energy-dependent quasiparticle distributions, scattering rates, and coherence factors.
+
+\subsection{Connection to Module 1}
+Module 1 may compute a temperature field using ballistic-diffusive or hyperbolic heat transport. Module 2 then uses that temperature field to update
+\begin{equation}
+\Delta(T),\qquad n_{\qp}^{\eq}(T),\qquad C_{e,s}(T),\qquad k_{e,s}(T),\qquad D_{\qp}(T),\qquad R(T).
+\end{equation}
+This is the simplest one-way coupling from heat transport to superconducting quasiparticle transport. Two-way coupling is possible when recombination and phonon escape return energy to the thermal model.
+
+\section{Quasiparticle poisoning in Josephson devices}
+
+\subsection{Why a few excitations can matter}
+A transmon qubit uses a Josephson junction as a nonlinear inductive element. Ideally, the low-energy circuit is described by a collective superconducting phase and charge degree of freedom. Quasiparticles introduce unwanted microscopic degrees of freedom. A quasiparticle near a junction can tunnel across the junction, change island parity, absorb energy, or create dissipation. The resulting effects can include relaxation, dephasing, parity switching, and excess noise.
+
+The device-scale modeling target is therefore not merely the total number of quasiparticles in the chip. It is their density and arrival rate near the junction-sensitive region $\JJvol$. A useful scalar diagnostic is
+\begin{equation}
+\bar n_{\JJ}(t)=\frac{1}{|\JJvol|}\int_{\JJvol}n_{\qp}(\br,t)\,dV.
+\end{equation}
+A corresponding exposure metric is
+\begin{equation}
+\mathcal{I}_{\JJ}=\int_0^{t_f}\int_{\JJvol}w_{\JJ}(\br)n_{\qp}(\br,t)\,dV\,dt,
+\end{equation}
+where $w_{\JJ}$ can weight the tunnel barrier or nearby leads more heavily.
+
+\subsection{Why geometry enters the physics}
+Quasiparticles diffuse through superconducting pads and leads. Traps remove them if placed effectively, but traps too close to the junction can introduce microwave loss or inverse proximity effects. Heat sinks can help high-energy phonons escape, but interfaces can also reflect phonons. Therefore the design problem is geometric: where should traps and heat-sinking structures be placed to minimize $\mathcal{I}_{\JJ}$ without degrading the qubit?
+
+Module 2 supplies the local physics. Module 3 supplies the geometry and FEM solution. Module 4 later learns maps from geometry parameters to metrics.
+
+\section{From microscopic motion to diffusion}
+
+\subsection{Continuity equation}
+Let $n_{\qp}(\br,t)$ be quasiparticle density and $\bm{J}_{\qp}(\br,t)$ be quasiparticle number flux. Conservation of quasiparticle number, allowing generation and removal, gives
+\begin{equation}
+\frac{\partial n_{\qp}}{\partial t}+\nabla\cdot\bm{J}_{\qp}=G_{\qp}-L_{\qp}.
+\end{equation}
+This is not yet a diffusion equation. It is a conservation statement. The physics enters through the constitutive relation for $\bm{J}_{\qp}$ and through the generation/loss terms.
+
+\subsection{Random-walk derivation of Fick's law}
+In an isotropic medium, quasiparticles scatter after a mean time $\tau$ and move with an effective speed $v$. A random walk in three dimensions has mean-square displacement
+\begin{equation}
+\langle r^2\rangle=6Dt.
+\end{equation}
+After $N=t/\tau$ steps of length $\ell=v\tau$,
+\begin{equation}
+\langle r^2\rangle=N\ell^2=\frac{t}{\tau}v^2\tau^2=v^2\tau t.
+\end{equation}
+Therefore
+\begin{equation}
+D=\frac{v^2\tau}{3}=\frac{v\ell}{3}.
+\end{equation}
+For particles whose density varies slowly compared with the mean free path, the flux moves down the density gradient:
+\begin{equation}
+\bm{J}_{\qp}=-D_{\qp}\nabla n_{\qp}.
+\end{equation}
+Substitute this into the continuity equation:
+\begin{equation}
+\frac{\partial n_{\qp}}{\partial t}=\nabla\cdot(D_{\qp}\nabla n_{\qp})+G_{\qp}-L_{\qp}.
+\end{equation}
+This is the transport skeleton used throughout the project.
+
+\subsection{Limits of scalar diffusion}
+A scalar diffusion coefficient assumes local isotropy, near-equilibrium momentum relaxation, and no explicit energy dependence. Real superconducting quasiparticles have energy-dependent velocity, density of states, and scattering rates. An energy-resolved kinetic model would track $f(E,\br,t)$. The scalar model is a controlled reduction only when the energy distribution relaxes faster than the spatial density changes, or when the engineering metric is insensitive to the detailed energy distribution.
+
+\section{Recombination: deriving the quadratic loss law}
+
+\subsection{Two-body counting argument}
+Quasiparticle recombination requires two quasiparticles to find each other and form a Cooper pair, emitting energy to a phonon or other mode. If the local density is $n_{\qp}$, then the number of possible pairs in a small volume scales as $n_{\qp}^2$. Therefore the simplest recombination loss is
+\begin{equation}
+\left.\frac{\partial n_{\qp}}{\partial t}\right|_{\rec}=-R n_{\qp}^2.
+\end{equation}
+The coefficient $R$ contains microscopic matrix elements, density of states, phonon emission probability, and energy-distribution effects.
+
+Check units. The left side has units $\mathrm{m}^{-3}\mathrm{s}^{-1}$. Since $n^2$ has units $\mathrm{m}^{-6}$, $R$ must have units
+\begin{equation}
+[R]=\mathrm{m}^3\mathrm{s}^{-1}.
+\end{equation}
+
+\subsection{Detailed balance form}
+At equilibrium, the net recombination-generation term must vanish when $n_{\qp}=n_{\qp}^{\eq}$. A reduced detailed-balance-compatible form is
+\begin{equation}
+\left.\frac{\partial n_{\qp}}{\partial t}\right|_{\rec/gen}
+=-R\left(n_{\qp}^2-(n_{\qp}^{\eq})^2\right).
+\end{equation}
+If $n_{\qp}>n_{\qp}^{\eq}$, the term is negative. If $n_{\qp}<n_{\qp}^{\eq}$, it is positive. Thus the term relaxes the density toward equilibrium without needing to explicitly model the thermal phonon bath.
+
+\subsection{Linearized recombination time}
+Let
+\begin{equation}
+ n_{\qp}=n_{\qp}^{\eq}+\delta n,
+\qquad |\delta n|\ll n_{\qp}^{\eq}.
+\end{equation}
+Then
+\begin{equation}
+ n_{\qp}^2-(n_{\qp}^{\eq})^2
+=(n_{\qp}^{\eq}+\delta n)^2-(n_{\qp}^{\eq})^2
+\approx2n_{\qp}^{\eq}\delta n.
+\end{equation}
+The perturbation obeys
+\begin{equation}
+\frac{\partial \delta n}{\partial t}\approx-2R n_{\qp}^{\eq}\delta n.
+\end{equation}
+Therefore the small-signal recombination time is
+\begin{equation}
+ \tau_R\approx\frac{1}{2R n_{\qp}^{\eq}}.
+\end{equation}
+At very low temperature, $n_{\qp}^{\eq}$ is exponentially small, so the equilibrium linearized recombination time can become long. For a large nonequilibrium density, the nonlinear decay time is instead density-dependent.
+
+\subsection{Nonlinear decay after a pulse}
+If diffusion, traps, and equilibrium generation are neglected, then
+\begin{equation}
+\frac{dn}{dt}=-Rn^2.
+\end{equation}
+Separate variables:
+\begin{equation}
+\frac{dn}{n^2}=-Rdt.
+\end{equation}
+Integrate from $n(0)=n_0$:
+\begin{equation}
+-\frac{1}{n(t)}+\frac{1}{n_0}=-Rt.
+\end{equation}
+Thus
+\begin{equation}
+ n(t)=\frac{n_0}{1+R n_0 t}.
+\end{equation}
+This algebraic decay is a signature of two-body recombination. It is slower than an exponential at late times.
+
+\section{Quasiparticle trapping}
+
+\subsection{Volume sink model}
+An engineered trap is modeled first as a local first-order sink:
+\begin{equation}
+\left.\frac{\partial n_{\qp}}{\partial t}\right|_{\trap}=-\Gamma_{\trap}(\br)n_{\qp}.
+\end{equation}
+The simplest geometry tag is
+\begin{equation}
+\Gamma_{\trap}(\br)=
+\begin{cases}
+\Gamma_0,& \br\in\Omega_{\trap},\\
+0,& \br\notin\Omega_{\trap}.
+\end{cases}
+\end{equation}
+If no diffusion or source exists inside the trap, the local solution is
+\begin{equation}
+ n_{\qp}(t)=n_{\qp}(0)e^{-\Gamma_0t}.
+\end{equation}
+This model is easy to implement in FEM because it simply adds a reaction term to elements tagged as trap material or trap-overlap regions.
+
+\subsection{Robin interface model}
+If trapping occurs at an interface rather than in a finite volume, use a boundary flux condition:
+\begin{equation}
+-D_{\qp}\nabla n_{\qp}\cdot\nvec=s_{\trap}n_{\qp}\qquad \text{on }\Gamma_{\trap}.
+\end{equation}
+Here $s_{\trap}$ has units of velocity. The left side is outward number flux, so this condition removes quasiparticles through the boundary. The two limiting cases are
+\begin{equation}
+ s_{\trap}=0 \quad \Rightarrow \quad \text{reflecting boundary},
+\end{equation}
+\begin{equation}
+ s_{\trap}\to\infty \quad \Rightarrow \quad n_{\qp}\to0 \text{ at the interface}.
+\end{equation}
+The Robin model is more physically tied to interface capture, while the volume model is easier for early 3D sweeps.
+
+\subsection{Physical mechanisms hidden in the trap coefficient}
+A real normal-metal trap does not magically delete quasiparticles. It changes the local quasiparticle energy landscape and provides states into which excitations can relax. The effective trap rate depends on
+\begin{itemize}[leftmargin=1.6em]
+    \item interface transparency between superconductor and trap;
+    \item superconducting gap mismatch or suppression near the interface;
+    \item diffusion through the superconducting lead into the trap region;
+    \item phonon emission during relaxation;
+    \item possible inverse proximity degradation of the superconducting circuit;
+    \item microwave loss introduced by normal metal near high-field regions.
+\end{itemize}
+For this project, $\Gamma_{\trap}$ and $s_{\trap}$ are design-level effective parameters. Later calibration can connect them to measurements or detailed interface simulations.
+
+\section{The central Module 2 quasiparticle PDE}
+
+\subsection{Strong form}
+Combining diffusion, recombination, trapping, and source generation gives
 \begin{equation}
 \frac{\partial n_{\qp}}{\partial t}
 =\nabla\cdot\left(D_{\qp}\nabla n_{\qp}\right)
--R\left(n_{\qp}^2-\left(n_{\qp}^{\mathrm{eq}}\right)^2\right)
--\Gamma_{\mathrm{trap}}(\rvec)n_{\qp}
-+S_{\qp}(\rvec,t).
-\label{eq:qp_transport}
+-R\left(n_{\qp}^2-(n_{\qp}^{\eq})^2\right)
+-\Gamma_{\trap}(\br)n_{\qp}
++S_{\qp}(\br,t).
+\label{eq:central_qp_pde}
 \end{equation}
-Each term has a distinct physical meaning:
+This is the default Module 2 output equation for Module 3.
+
+Each term has a sign test:
 \begin{itemize}[leftmargin=1.6em]
-    \item $\nabla\cdot(D_{\qp}\nabla n_{\qp})$ spreads quasiparticles spatially.
-    \item $R(n_{\qp}^2-(n_{\qp}^{\mathrm{eq}})^2)$ drives recombination toward equilibrium. The quadratic dependence appears because recombination requires two quasiparticles.
-    \item $\Gamma_{\mathrm{trap}}(\rvec)n_{\qp}$ removes quasiparticles in trap regions.
-    \item $S_{\qp}(\rvec,t)$ generates quasiparticles from deposited energy or nonequilibrium excitation.
+    \item diffusion smooths spatial gradients;
+    \item recombination is negative above equilibrium;
+    \item thermal generation is positive below equilibrium;
+    \item trap removal is negative wherever $\Gamma_{\trap}>0$;
+    \item sources are positive where energy creates quasiparticles.
 \end{itemize}
 
-This is the central equation for Module 2 and Module 3. It is intentionally simpler than a full kinetic equation, but it is ideal for geometry-level trap studies.
-
-\section{Where the recombination term comes from}
-Quasiparticle recombination is a two-body process. If $n_{\qp}$ is the density of quasiparticles, then the probability of finding two quasiparticles in the same effective interaction volume scales as $n_{\qp}^2$. Therefore the simplest recombination law is
+\subsection{Initial and boundary conditions}
+A pulse-like event can be represented by an initial condition
 \begin{equation}
-\left.\frac{\partial n_{\qp}}{\partial t}\right|_{\mathrm{rec}}=-R n_{\qp}^2.
+ n_{\qp}(\br,0)=n_{\qp}^{\eq}(T_0)+n_{\mathrm{pulse}}(\br),
 \end{equation}
-However, if the material is in thermal equilibrium at temperature $T$, the density should not decay to zero; it should decay to $n_{\qp}^{\mathrm{eq}}(T)$. A detailed-balance-compatible reduced form is therefore
-\begin{equation}
-\left.\frac{\partial n_{\qp}}{\partial t}\right|_{\mathrm{rec}}=-R\left(n_{\qp}^2-\left(n_{\qp}^{\mathrm{eq}}\right)^2\right).
-\end{equation}
-If $n_{\qp}>n_{\qp}^{\mathrm{eq}}$, the term is negative and recombination dominates. If $n_{\qp}<n_{\qp}^{\mathrm{eq}}$, the term is positive, representing thermal generation toward equilibrium.
-
-\section{Trap term and physical meaning}
-A normal-metal quasiparticle trap is represented by a spatially localized removal rate $\Gamma_{\mathrm{trap}}(\rvec)$. In the simplest model,
-\begin{equation}
-\Gamma_{\mathrm{trap}}(\rvec)=
-\begin{cases}
-\Gamma_0, & \rvec\in\Omega_{\mathrm{trap}},\\
-0, & \rvec\notin\Omega_{\mathrm{trap}}.
-\end{cases}
-\end{equation}
-Then the trap contribution is
-\begin{equation}
-\left.\frac{\partial n_{\qp}}{\partial t}\right|_{\mathrm{trap}}=-\Gamma_{\mathrm{trap}}(\rvec)n_{\qp}.
-\end{equation}
-This says that the local density decays exponentially in a trap region if diffusion and sources are absent.
-
-A more realistic model would make $\Gamma_{\mathrm{trap}}$ depend on interface transparency, inverse proximity effects, material gap mismatch, and phonon bottleneck physics. Those details belong to a later extension. The first implementation uses $\Gamma_{\mathrm{trap}}$ as an effective design parameter.
-
-\section{Thermal material coefficients below $T_c$}
-Superconductivity changes thermal coefficients because electronic excitations are gapped. A reduced implementation can use the following modeling hierarchy:
-\begin{enumerate}[leftmargin=1.6em]
-    \item Use measured or literature values when available.
-    \item If unavailable, use normal-state properties above $T_c$.
-    \item Below $T_c$, suppress electronic contributions using an exponential factor controlled by $\Delta/\kB T$.
-    \item Keep phonon thermal transport in the substrate distinct from electronic/quasiparticle transport in the metal film.
-\end{enumerate}
-
-For example, an engineering-level suppression model for an electronic thermal conductivity contribution is
-\begin{equation}
-k_{e,s}(T)\approx k_{e,n}(T)\,\exp\left[-\frac{\Delta(T)}{\kB T}\right],
-\end{equation}
-where $k_{e,n}$ is the normal-state electronic contribution. This is not a substitute for detailed superconducting transport theory; it is a reduced model for first geometry sweeps.
-
-\section{Coupling heat and quasiparticles}
-A thermal model and a quasiparticle model can be coupled in several ways. The simplest one-way coupling is
-\begin{equation}
-T(\rvec,t)\longrightarrow \Delta(T),\quad n_{\qp}^{\mathrm{eq}}(T),\quad D_{\qp}(T),\quad R(T).
-\end{equation}
-The quasiparticle equation then evolves with coefficients determined by the temperature field.
-
-A stronger two-way coupling adds an energy source/sink to the thermal equation:
-\begin{equation}
-C\frac{\partial T}{\partial t}=\nabla\cdot(k\nabla T)+Q_{\mathrm{ext}}+Q_{\mathrm{rec}}-Q_{\mathrm{escape}},
-\end{equation}
-where $Q_{\mathrm{rec}}$ is energy released by recombination and $Q_{\mathrm{escape}}$ is energy removed by phonon escape or a heat sink. This is deferred until after the reduced transport model is stable.
-
-\section{Boundary and interface modeling}
-For the first FEM implementation, use no-flux boundary conditions for quasiparticles on insulating boundaries:
+or by a time-dependent source term $S_{\qp}(\br,t)$. Insulating or symmetry boundaries use
 \begin{equation}
 -D_{\qp}\nabla n_{\qp}\cdot\nvec=0.
 \end{equation}
-At trap surfaces or trap volumes, either a volume sink $\Gamma_{\mathrm{trap}}n_{\qp}$ or a Robin boundary condition can be used. A Robin trap boundary has the form
+Trap interfaces may use the Robin condition above. Absorbing boundaries, if representing a perfect sink, can use
 \begin{equation}
--D_{\qp}\nabla n_{\qp}\cdot\nvec = s_{\mathrm{trap}} n_{\qp},
+ n_{\qp}=n_{\qp}^{\eq}
 \end{equation}
-where $s_{\mathrm{trap}}$ is an interface capture velocity. The volume-sink model is easier to implement in the first 3D mesh, so that is the default.
+or $n_{\qp}=0$ for excess-density formulations.
 
-\section{Recommended first model}
-The first superconducting-temperature model should solve
+\subsection{Excess-density formulation}
+Sometimes it is numerically cleaner to solve for excess density
+\begin{equation}
+\tilde n=n_{\qp}-n_{\qp}^{\eq}.
+\end{equation}
+If $n_{\qp}^{\eq}$ is spatially constant, then
+\begin{equation}
+\frac{\partial \tilde n}{\partial t}=\nabla\cdot(D_{\qp}\nabla\tilde n)
+-R\left[(\tilde n+n_{\qp}^{\eq})^2-(n_{\qp}^{\eq})^2\right]
+-\Gamma_{\trap}(\tilde n+n_{\qp}^{\eq})+S_{\qp}.
+\end{equation}
+If traps should remove only excess quasiparticles relative to a maintained bath equilibrium, one may instead model the trap term as $-\Gamma_{\trap}\tilde n$. This is a modeling choice. The correct choice depends on whether the trap is treated as an equilibrium reservoir or as a physical volume in which quasiparticles relax.
+
+\section{Energy deposition and quasiparticle source terms}
+
+\subsection{Energy-to-number conversion}
+Suppose energy is absorbed in the superconducting film at volumetric power density $Q_{\mathrm{abs}}(\br,t)$ with units $\mathrm{J\,m^{-3}\,s^{-1}}$. If a fraction $\eta_{\qp}$ of that absorbed energy ends up creating quasiparticles, then a simple source model is
+\begin{equation}
+S_{\qp}(\br,t)=\eta_{\qp}\frac{Q_{\mathrm{abs}}(\br,t)}{\Delta}.
+\end{equation}
+This expression converts an energy rate density into a quasiparticle number generation rate density. A more conservative pair-breaking estimate would use $2\Delta$ per broken pair and two quasiparticles per pair:
+\begin{equation}
+S_{\qp}=2\eta_{\mathrm{pair}}\frac{Q_{\mathrm{abs}}}{2\Delta}=\eta_{\mathrm{pair}}\frac{Q_{\mathrm{abs}}}{\Delta}.
+\end{equation}
+Thus the same form appears, but the efficiency must be interpreted carefully.
+
+\subsection{Photon threshold}
+A photon of frequency $\nu$ has energy
+\begin{equation}
+E_\gamma=h\nu=\hbar\omega.
+\end{equation}
+Direct pair breaking requires
+\begin{equation}
+ h\nu\ge2\Delta.
+\end{equation}
+If $h\nu\gg2\Delta$, one photon can in principle produce many quasiparticles after a cascade. The maximum number based only on energy conservation is roughly
+\begin{equation}
+ N_{\qp}^{\max}\sim\frac{h\nu}{\Delta},
+\end{equation}
+but the actual number is smaller because energy can be lost to sub-gap phonons, escape to substrate, heating, or other channels.
+
+\subsection{Spatial source models}
+For FEM implementation, useful source shapes include:
+\begin{enumerate}[leftmargin=1.6em]
+    \item \textbf{Gaussian local event:}
+    \begin{equation}
+    S_{\qp}(\br,t)=S_0\exp\left(-\frac{|\br-\br_0|^2}{2\sigma_r^2}\right)
+    \exp\left(-\frac{(t-t_0)^2}{2\sigma_t^2}\right).
+    \end{equation}
+    \item \textbf{Film-uniform pulse:}
+    \begin{equation}
+    S_{\qp}(\br,t)=S_0\chi_{\film}(\br)g(t).
+    \end{equation}
+    \item \textbf{Junction-local source:}
+    \begin{equation}
+    S_{\qp}(\br,t)=S_0\chi_{\JJvol}(\br)g(t).
+    \end{equation}
+    \item \textbf{Imported Monte Carlo deposition:}
+    \begin{equation}
+    S_{\qp}(\br,t)=\eta_{\qp}\frac{Q_{\mathrm{MC}}(\br,t)}{\Delta(T)}.
+    \end{equation}
+\end{enumerate}
+Here $\chi$ is an indicator function for a geometry region.
+
+\section{Electron-phonon nonequilibrium after energy absorption}
+
+\subsection{Why one temperature can fail}
+Immediately after a photon or energetic particle deposits energy, the electron/quasiparticle subsystem and the phonon subsystem may not share one temperature. Electron-electron scattering may rapidly redistribute electronic energy, while electron-phonon scattering transfers energy to the lattice over a different time scale. A two-temperature model captures this separation:
+\begin{equation}
+C_e(T_e)\frac{\partial T_e}{\partial t}=\nabla\cdot(k_e\nabla T_e)-G_{e-ph}(T_e,T_{ph})+Q_{\mathrm{abs}},
+\end{equation}
+\begin{equation}
+C_{ph}(T_{ph})\frac{\partial T_{ph}}{\partial t}=\nabla\cdot(k_{ph}\nabla T_{ph})+G_{e-ph}(T_e,T_{ph})-G_{\esc}(T_{ph},T_{\sub}).
+\end{equation}
+The sign convention is chosen so that $G_{e-ph}>0$ removes energy from electrons and adds it to phonons when $T_e>T_{ph}$.
+
+\subsection{Deriving the normal-metal $T^5$ energy-transfer law by scaling}
+A commonly used low-temperature normal-metal law is
+\begin{equation}
+P_{e-ph}=\Sigma V(T_e^5-T_{ph}^5).
+\end{equation}
+A full derivation requires Fermi's golden rule and electron-phonon matrix elements. The scaling can be understood as follows. At low temperature, relevant phonon energies are $\hbar\omega\sim\kB T$. In three dimensions, the acoustic phonon density of states scales as
+\begin{equation}
+D_{ph}(\omega)\propto\omega^2.
+\end{equation}
+The energy per phonon contributes a factor $\hbar\omega$. The occupation difference contributes a thermal factor. The deformation-potential matrix element and phase-space constraints add additional powers. The resulting power transferred scales as the fifth power of temperature for clean three-dimensional normal metals:
+\begin{equation}
+\frac{P_{e-ph}}{V}=\Sigma(T_e^5-T_{ph}^5).
+\end{equation}
+In superconductors, the gapped quasiparticle density of states modifies this strongly. Therefore, in this project, the $T^5$ law is a bridge model, not the final microscopic superconducting electron-phonon kernel.
+
+\subsection{Superconducting correction concept}
+A phenomenological superconducting suppression can be introduced as
+\begin{equation}
+G_{e-ph}^{(s)}(T_e,T_{ph})\approx F_{sc}(T_e,T_{ph},\Delta)\,\Sigma(T_e^5-T_{ph}^5),
+\end{equation}
+where $F_{sc}$ decreases rapidly when both subsystem temperatures are much below $\Delta/\kB$. A crude first form is
+\begin{equation}
+F_{sc}\sim\exp\left[-\frac{\Delta}{\kB T_e}\right].
+\end{equation}
+More realistic models use energy integrals over BCS density of states and coherence factors. That higher-fidelity extension can be added after the scalar quasiparticle model is verified.
+
+\section{Pair-breaking phonons and the phonon bottleneck}
+
+\subsection{Recombination emits high-energy phonons}
+When two quasiparticles recombine into a Cooper pair, the quasiparticle excitation energy must go somewhere. The emitted phonon has energy at least approximately $2\Delta$ if both quasiparticles are near the gap edge. Such a phonon can break another Cooper pair:
+\begin{equation}
+\hbar\Omega\ge2\Delta.
+\end{equation}
+Therefore recombination does not always permanently eliminate excitations. It can convert two quasiparticles into one energetic phonon, which may later regenerate two quasiparticles.
+
+\subsection{The bottleneck feedback loop}
+The feedback loop is
+\begin{equation}
+2\,\mathrm{QP}\rightarrow\mathrm{Cooper\ pair}+\Omega_{2\Delta},
+\end{equation}
+\begin{equation}
+\Omega_{2\Delta}+\mathrm{Cooper\ pair}\rightarrow2\,\mathrm{QP}.
+\end{equation}
+If the $2\Delta$ phonon escapes quickly into the substrate or down-converts below the pair-breaking threshold, recombination is effective. If it remains trapped in the film, quasiparticle decay is slowed. This is the phonon bottleneck.
+
+For device design, traps remove quasiparticles and heat sinks remove pair-breaking phonons. Both can matter. A trap that removes QPs but causes local high-energy phonon re-emission may be less effective than expected unless phonon escape is also engineered.
+
+\section{Rothwarf-Taylor equations}
+
+\subsection{Lumped rate derivation}
+Let $N_{\qp}(t)$ be the total number of quasiparticles in a region, and let $N_{\Omega}(t)$ be the number of pair-breaking phonons. Recombination removes two quasiparticles per event. If the event rate is proportional to $N_{\qp}^2$, write the quasiparticle loss as
+\begin{equation}
+\left.\frac{dN_{\qp}}{dt}\right|_{\rec}=-R N_{\qp}^2.
+\end{equation}
+The same event creates one pair-breaking phonon, so
+\begin{equation}
+\left.\frac{dN_{\Omega}}{dt}\right|_{\rec}=\frac{1}{2}R N_{\qp}^2,
+\end{equation}
+where the factor $1/2$ is consistent with two quasiparticles disappearing per one phonon created.
+
+Pair-breaking phonons create two quasiparticles per event. If the pair-breaking event rate is $\beta N_{\Omega}$, then
+\begin{equation}
+\left.\frac{dN_{\qp}}{dt}\right|_{\mathrm{pb}}=2\beta N_{\Omega},
+\end{equation}
+\begin{equation}
+\left.\frac{dN_{\Omega}}{dt}\right|_{\mathrm{pb}}=-\beta N_{\Omega}.
+\end{equation}
+Phonon escape removes pair-breaking phonons:
+\begin{equation}
+\left.\frac{dN_{\Omega}}{dt}\right|_{\esc}=-\frac{N_{\Omega}}{\tau_{\esc}}.
+\end{equation}
+Add external generation terms $G_{\qp}$ and $G_\Omega$ to get
+\begin{equation}
+\frac{dN_{\qp}}{dt}=-R N_{\qp}^2+2\beta N_\Omega+G_{\qp},
+\label{eq:rt_lumped_qp}
+\end{equation}
+\begin{equation}
+\frac{dN_\Omega}{dt}=\frac{1}{2}R N_{\qp}^2-\beta N_\Omega-\frac{N_\Omega}{\tau_{\esc}}+G_\Omega.
+\label{eq:rt_lumped_ph}
+\end{equation}
+These are the Rothwarf-Taylor equations in a simplified lumped form.
+
+\subsection{Steady-state insight}
+Set $G_\Omega=0$ and solve Eq.~\eqref{eq:rt_lumped_ph} in quasi-steady state:
+\begin{equation}
+0=\frac{1}{2}R N_{\qp}^2-\left(\beta+\frac{1}{\tau_{\esc}}\right)N_\Omega.
+\end{equation}
+Thus
+\begin{equation}
+N_\Omega=\frac{R N_{\qp}^2}{2(\beta+1/\tau_{\esc})}.
+\end{equation}
+Substitute into Eq.~\eqref{eq:rt_lumped_qp} without $G_{\qp}$:
+\begin{equation}
+\frac{dN_{\qp}}{dt}=-R N_{\qp}^2+2\beta\frac{R N_{\qp}^2}{2(\beta+1/\tau_{\esc})}
+=-R_{\eff}N_{\qp}^2,
+\end{equation}
+where
+\begin{equation}
+R_{\eff}=R\left(1-\frac{\beta}{\beta+1/\tau_{\esc}}\right)
+=\frac{R}{1+\beta\tau_{\esc}}.
+\end{equation}
+This simple result captures the bottleneck: if $\beta\tau_{\esc}\gg1$, pair-breaking phonons are likely to break pairs before escaping, and the effective recombination coefficient is reduced.
+
+\section{Spatial Rothwarf-Taylor equations}
+
+\subsection{Adding diffusion}
+For device-scale FEM, replace lumped numbers by densities. Let $n_{\Omega}(\br,t)$ be the density of pair-breaking phonons. Add diffusion for both populations:
 \begin{equation}
 \frac{\partial n_{\qp}}{\partial t}
-=\nabla\cdot\left(D_{\qp}\nabla n_{\qp}\right)
--Rn_{\qp}^2
--\Gamma_{\mathrm{trap}}(\rvec)n_{\qp}
-+S_{\qp}(\rvec,t),
+=\nabla\cdot(D_{\qp}\nabla n_{\qp})
+-R n_{\qp}^2+2\beta n_{\Omega}
+-\Gamma_{\trap}n_{\qp}+S_{\qp},
+\label{eq:spatial_rt_qp}
 \end{equation}
-with constant $D_{\qp}$ and $R$ inside the superconducting metal, a localized source near the junction or pad, and trap-rate regions defined by geometry tags. Once this works, temperature dependence can be activated through helper functions.
+\begin{equation}
+\frac{\partial n_{\Omega}}{\partial t}
+=\nabla\cdot(D_{\Omega}\nabla n_{\Omega})
++\frac{1}{2}R n_{\qp}^2-\beta n_{\Omega}
+-\frac{n_{\Omega}}{\tau_{\esc}}
++S_{\Omega}.
+\label{eq:spatial_rt_ph}
+\end{equation}
+These equations are a natural Module 2 upgrade after the scalar quasiparticle PDE is working.
+
+\subsection{Energy consistency check}
+Near the gap edge, two quasiparticles carry energy approximately $2\Delta$. One pair-breaking phonon also carries energy at least $2\Delta$. The recombination and pair-breaking terms exchange excitation energy between the two populations. The escape term removes phonon energy from the modeled film. If coupling to a heat equation is added, the energy sink associated with phonon escape is roughly
+\begin{equation}
+Q_{\esc}\approx \frac{2\Delta n_{\Omega}}{\tau_{\esc}},
+\end{equation}
+with units of energy per volume per time. This can be deposited into a substrate heat equation or removed as a boundary/sink term.
+
+\subsection{When spatial RT is worth the cost}
+The scalar PDE Eq.~\eqref{eq:central_qp_pde} is adequate for trap geometry ranking when the source term already represents net quasiparticle creation and when phonon bottleneck effects are absorbed into an effective $R$. Spatial RT becomes valuable when the design variables explicitly change phonon escape: membrane thickness, acoustic mismatch, substrate contact, phonon traps, or metal layers intended to down-convert phonons.
+
+
+\section{Finite element implementation of Module 2 physics}
+
+\subsection{Why Module 2 needs its own FEM derivation}
+Module 1 used FEM to solve a heat-transport equation. Module 2 uses the same mathematical machinery, but the unknown is not necessarily temperature. The most important unknown is the quasiparticle density
+\begin{equation}
+ n_{\qp}(\br,t) \quad [\mathrm{m^{-3}}],
+\end{equation}
+and, in the higher-fidelity model, the pair-breaking phonon density
+\begin{equation}
+ n_{\Omega}(\br,t) \quad [\mathrm{m^{-3}}].
+\end{equation}
+If thermal feedback is enabled, temperature $T(\br,t)$ is added as a third field. The FEM implementation therefore has to handle three features that were not all present in the simplest heat equation:
+\begin{enumerate}[leftmargin=1.6em]
+    \item diffusion terms, such as $\nabla\cdot(D_{\qp}\nabla n_{\qp})$;
+    \item linear sinks, such as trap removal $\Gamma_{\trap}n_{\qp}$;
+    \item nonlinear reactions, especially quasiparticle recombination $R n_{\qp}^2$.
+\end{enumerate}
+The goal of this section is to derive the finite element chain from the governing strong form all the way to the nodal algebraic system that a MATLAB or Python implementation solves.
+
+\begin{physicsbox}
+\textbf{Core idea.} FEM replaces a continuous field such as $n_{\qp}(\br,t)$ by a finite sum of local basis functions. The PDE is not forced to hold point-by-point everywhere. Instead, the residual is forced to be orthogonal to a space of test functions. This produces matrix equations for nodal values.
+\end{physicsbox}
+
+\subsection{The scalar quasiparticle model as the baseline PDE}
+The baseline Module 2 PDE is the scalar quasiparticle diffusion-reaction-trapping equation
+\begin{equation}
+\frac{\partial n}{\partial t}
+=\nabla\cdot(D\nabla n)
+-R(n^2-n_{\eq}^2)
+-\Gamma n
++S,
+\label{eq:fem_scalar_qp_strong_time_forward}
+\end{equation}
+where, to keep notation clean in the FEM derivation,
+\begin{equation}
+ n\equiv n_{\qp},\qquad D\equiv D_{\qp},\qquad \Gamma\equiv\Gamma_{\trap},\qquad S\equiv S_{\qp}.
+\end{equation}
+All coefficients may depend on material region and temperature:
+\begin{equation}
+D=D(\br,T),\qquad R=R(\br,T),\qquad \Gamma=\Gamma(\br,T),\qquad n_{\eq}=n_{\qp}^{\eq}(T).
+\end{equation}
+For the first implementation, treat them as known during a time step. Later, if they depend strongly on $T$ or $n$, update them inside a nonlinear iteration.
+
+It is useful to write Eq.~\eqref{eq:fem_scalar_qp_strong_time_forward} in residual form:
+\begin{equation}
+\mathcal{L}(n)
+\equiv
+\frac{\partial n}{\partial t}
+-\nabla\cdot(D\nabla n)
++R(n^2-n_{\eq}^2)
++\Gamma n
+-S
+=0.
+\label{eq:fem_scalar_qp_residual_strong}
+\end{equation}
+This is the strong form. It requires the PDE to hold at every point where the solution is smooth.
+
+\subsection{Conservation-law origin of the strong form}
+The scalar equation is not arbitrary. It comes from local conservation of quasiparticle number. Consider a small volume $V_c$ with outward normal $\nvec$. The rate of change of quasiparticles inside the volume equals inward flux plus generation minus removal:
+\begin{equation}
+\frac{d}{dt}\int_{V_c} n\,dV
+= -\int_{\partial V_c}\bm{J}_{\qp}\cdot\nvec\,dA
++\int_{V_c} \mathcal{G}\,dV,
+\end{equation}
+where $\bm{J}_{\qp}$ is the quasiparticle number flux and $\mathcal{G}$ is the net local production rate density. Use the divergence theorem:
+\begin{equation}
+\int_{\partial V_c}\bm{J}_{\qp}\cdot\nvec\,dA
+=\int_{V_c}\nabla\cdot\bm{J}_{\qp}\,dV.
+\end{equation}
+Because the control volume is arbitrary,
+\begin{equation}
+\frac{\partial n}{\partial t}+\nabla\cdot\bm{J}_{\qp}=\mathcal{G}.
+\label{eq:fem_qp_conservation}
+\end{equation}
+For diffusive quasiparticle motion, use Fick's law:
+\begin{equation}
+\bm{J}_{\qp}=-D\nabla n.
+\label{eq:fem_fick_qp}
+\end{equation}
+The net production rate is modeled as
+\begin{equation}
+\mathcal{G}=S-R(n^2-n_{\eq}^2)-\Gamma n.
+\end{equation}
+Substitution into Eq.~\eqref{eq:fem_qp_conservation} gives Eq.~\eqref{eq:fem_scalar_qp_strong_time_forward}. Thus the signs of the terms have a physical meaning:
+\begin{itemize}[leftmargin=1.6em]
+    \item $S$ increases quasiparticle density;
+    \item $R(n^2-n_{\eq}^2)$ removes excess quasiparticles when $n>n_{\eq}$;
+    \item $\Gamma n$ removes quasiparticles through traps or engineered sinks;
+    \item $\nabla\cdot(D\nabla n)$ spreads quasiparticles spatially.
+\end{itemize}
+
+\subsection{Domain, material regions, and boundary partition}
+Let $\Omega$ be the superconducting region or the effective region where the quasiparticle density is solved. The boundary is split into pieces:
+\begin{equation}
+\partial\Omega=\Gamma_N\cup\Gamma_{\trap}\cup\Gamma_D\cup\Gamma_{\mathrm{int}},
+\end{equation}
+where
+\begin{itemize}[leftmargin=1.6em]
+    \item $\Gamma_N$ is a no-flux or prescribed-flux boundary;
+    \item $\Gamma_{\trap}$ is a trap interface represented by a Robin capture law;
+    \item $\Gamma_D$ is a prescribed-density boundary, used rarely but useful for tests;
+    \item $\Gamma_{\mathrm{int}}$ is an internal material interface.
+\end{itemize}
+For FEM, the most common boundary conditions are:
+\begin{align}
+-D\nabla n\cdot\nvec &= g_N &&\text{on }\Gamma_N,\label{eq:fem_qp_neumann}\\
+-D\nabla n\cdot\nvec &= s_{\trap}(n-n_{\trap}^{\eq}) &&\text{on }\Gamma_{\trap},\label{eq:fem_qp_robin}\\
+n&=\bar n &&\text{on }\Gamma_D.\label{eq:fem_qp_dirichlet}
+\end{align}
+Here $g_N$ is an outward loss flux. A no-flux boundary is the special case $g_N=0$. The trap capture velocity $s_{\trap}$ has units of meters per second, so $s_{\trap}n$ has units $\mathrm{m^{-2}s^{-1}}$, exactly the units of a particle flux.
+
+\subsection{From strong form to weighted residual}
+FEM begins by multiplying the strong residual by a test function $w(\br)$ and integrating over the domain:
+\begin{equation}
+\int_{\Omega}w\left[
+\frac{\partial n}{\partial t}
+-\nabla\cdot(D\nabla n)
++R(n^2-n_{\eq}^2)
++\Gamma n
+-S
+\right]dV=0.
+\label{eq:fem_weighted_residual_before_parts}
+\end{equation}
+This equation says that the residual may not be exactly zero pointwise after discretization, but its weighted average against every admissible test function should vanish.
+
+The diffusion term contains second derivatives of $n$ if expanded. FEM reduces the differentiability requirement by integrating by parts:
+\begin{equation}
+\int_{\Omega}w\nabla\cdot(D\nabla n)dV
+=\int_{\partial\Omega}wD\nabla n\cdot\nvec\,dA
+-\int_{\Omega}\nabla w\cdot D\nabla n\,dV.
+\end{equation}
+Therefore
+\begin{align}
+\int_{\Omega}w\frac{\partial n}{\partial t}dV
+&+\int_{\Omega}\nabla w\cdot D\nabla n\,dV
++\int_{\Omega}wR(n^2-n_{\eq}^2)dV
++\int_{\Omega}w\Gamma n\,dV \nonumber\\
+&-\int_{\partial\Omega}wD\nabla n\cdot\nvec\,dA
+=\int_{\Omega}wS\,dV.
+\label{eq:fem_weak_before_bc}
+\end{align}
+Because $\bm{J}_{\qp}=-D\nabla n$, the boundary term can be written as
+\begin{equation}
+-D\nabla n\cdot\nvec=\bm{J}_{\qp}\cdot\nvec.
+\end{equation}
+The sign convention is important. If $\bm{J}_{\qp}\cdot\nvec>0$, quasiparticles leave the domain.
+
+\subsection{Natural appearance of Neumann and Robin boundaries}
+On a prescribed-flux boundary, Eq.~\eqref{eq:fem_qp_neumann} gives
+\begin{equation}
+D\nabla n\cdot\nvec=-g_N.
+\end{equation}
+On a trap boundary, Eq.~\eqref{eq:fem_qp_robin} gives
+\begin{equation}
+D\nabla n\cdot\nvec=-s_{\trap}(n-n_{\trap}^{\eq}).
+\end{equation}
+Substituting into Eq.~\eqref{eq:fem_weak_before_bc} yields the scalar quasiparticle weak form:
+\begin{align}
+\int_{\Omega}w\frac{\partial n}{\partial t}dV
+&+\int_{\Omega}\nabla w\cdot D\nabla n\,dV
++\int_{\Omega}wR(n^2-n_{\eq}^2)dV
++\int_{\Omega}w\Gamma n\,dV \nonumber\\
+&+\int_{\Gamma_{\trap}}w s_{\trap}n\,dA
+=\int_{\Omega}wS\,dV
++\int_{\Gamma_N}w g_N\,dA
++\int_{\Gamma_{\trap}}w s_{\trap}n_{\trap}^{\eq}\,dA.
+\label{eq:fem_scalar_qp_weak_full}
+\end{align}
+This is the form that should be assembled. A no-flux boundary contributes nothing because $g_N=0$. A trap boundary contributes a positive matrix term on the left and, if the trap equilibrium density is nonzero, a boundary source term on the right.
+
+\begin{notebox}
+\textbf{Weak form interpretation.} Diffusion produces a stiffness matrix, storage produces a mass matrix, volume trapping produces a reaction matrix, boundary trapping produces a surface reaction matrix, recombination produces a nonlinear vector, and sources produce a load vector.
+\end{notebox}
+
+\subsection{Finite element mesh and local approximation}
+Divide the domain into finite elements:
+\begin{equation}
+\Omega\approx\Omega_h=\bigcup_{e=1}^{N_e}\Omega_e.
+\end{equation}
+Each element has local nodes $A=1,\ldots,n_{en}$ and shape functions $N_A^{(e)}(\br)$. Inside element $e$, approximate the field as
+\begin{equation}
+ n_h^{(e)}(\br,t)=\sum_{A=1}^{n_{en}}N_A^{(e)}(\br)n_A^{(e)}(t).
+\label{eq:fem_local_qp_expansion}
+\end{equation}
+The local nodal value $n_A^{(e)}$ is the global nodal value associated with the global node number $I=\mathrm{conn}(e,A)$.
+
+The Galerkin method uses the same functions for tests:
+\begin{equation}
+ w_h^{(e)}(\br)=N_B^{(e)}(\br),\qquad B=1,\ldots,n_{en}.
+\end{equation}
+This choice gives one algebraic equation per node.
+
+\subsection{Shape functions in one dimension: the simplest example}
+For a two-node line element on $x\in[x_1,x_2]$, define the local coordinate $\xi\in[-1,1]$ and element length $h=x_2-x_1$. The mapping is
+\begin{equation}
+ x(\xi)=\frac{x_1+x_2}{2}+\frac{h}{2}\xi.
+\end{equation}
+The linear shape functions are
+\begin{equation}
+N_1(\xi)=\frac{1-\xi}{2},\qquad N_2(\xi)=\frac{1+\xi}{2}.
+\end{equation}
+They satisfy
+\begin{equation}
+N_A(x_B)=\delta_{AB},\qquad N_1+N_2=1.
+\end{equation}
+The derivative transformation is
+\begin{equation}
+\frac{dN_A}{dx}=\frac{dN_A}{d\xi}\frac{d\xi}{dx},
+\qquad
+\frac{d\xi}{dx}=\frac{2}{h}.
+\end{equation}
+Thus
+\begin{equation}
+\frac{dN_1}{dx}=-\frac{1}{h},\qquad \frac{dN_2}{dx}=\frac{1}{h}.
+\end{equation}
+This tiny example already contains the full FEM idea: interpolate the unknown with nodal basis functions and integrate products of basis functions and their gradients.
+
+\subsection{Shape functions in a three-dimensional transmon mesh}
+For a structured hexahedral mesh, a common element is the eight-node brick, often called Hex8. In parent coordinates $(\xi,\eta,\zeta)\in[-1,1]^3$, each node has signs $(\xi_A,\eta_A,\zeta_A)$ with each sign equal to $\pm1$. The shape function is
+\begin{equation}
+N_A(\xi,\eta,\zeta)=\frac{1}{8}(1+\xi\xi_A)(1+\eta\eta_A)(1+\zeta\zeta_A).
+\label{eq:fem_hex8_shape}
+\end{equation}
+The physical coordinate is interpolated by the same shape functions:
+\begin{equation}
+\br(\xi,\eta,\zeta)=\sum_{A=1}^{8}N_A(\xi,\eta,\zeta)\br_A.
+\end{equation}
+Define the Jacobian matrix
+\begin{equation}
+\bm{J}_e=\frac{\partial(x,y,z)}{\partial(\xi,\eta,\zeta)}.
+\end{equation}
+Gradients in physical coordinates are obtained from
+\begin{equation}
+\nabla_{\br}N_A=\bm{J}_e^{-T}\nabla_{\xi}N_A.
+\end{equation}
+The volume element transforms as
+\begin{equation}
+dV=\det(\bm{J}_e)d\xi d\eta d\zeta.
+\end{equation}
+For rectangular bricks aligned with the coordinate axes, this reduces to simple factors involving $h_x,h_y,h_z$, but the Jacobian formulation is more general and is what the code should use.
+
+\subsection{Element mass matrix}
+Insert the finite element expansion into the time-storage term of Eq.~\eqref{eq:fem_scalar_qp_weak_full}. For test function $N_B$,
+\begin{equation}
+\int_{\Omega_e}N_B\frac{\partial n_h}{\partial t}dV
+=\sum_{A=1}^{n_{en}}\left[\int_{\Omega_e}N_BN_A\,dV\right]\dot n_A^{(e)}.
+\end{equation}
+The element mass matrix is therefore
+\begin{equation}
+M_{BA}^{(e)}=\int_{\Omega_e}N_BN_A\,dV.
+\label{eq:fem_qp_element_mass}
+\end{equation}
+Its units are volume, because $n$ has units $\mathrm{m^{-3}}$ and $M\dot n$ has units $\mathrm{s^{-1}}$ per node after integration.
+
+For a 1D linear element with constant cross-sectional area $A_c$, the mass matrix is
+\begin{equation}
+\bm{M}^{(e)}=\frac{A_c h}{6}
+\begin{bmatrix}
+2&1\\
+1&2
+\end{bmatrix}.
+\label{eq:fem_1d_mass}
+\end{equation}
+Mass lumping replaces this by a diagonal approximation
+\begin{equation}
+\bm{M}^{(e)}_{\mathrm{lump}}=\frac{A_c h}{2}
+\begin{bmatrix}
+1&0\\
+0&1
+\end{bmatrix},
+\end{equation}
+which can help positivity in explicit or split schemes.
+
+\subsection{Element diffusion stiffness matrix}
+The diffusion term gives
+\begin{equation}
+\int_{\Omega_e}\nabla N_B\cdot D\nabla n_h\,dV
+=\sum_{A=1}^{n_{en}}\left[\int_{\Omega_e}\nabla N_B\cdot D\nabla N_A\,dV\right]n_A^{(e)}.
+\end{equation}
+The element diffusion stiffness matrix is
+\begin{equation}
+K_{BA}^{(e)}=\int_{\Omega_e}\nabla N_B\cdot D\nabla N_A\,dV.
+\label{eq:fem_qp_element_stiffness}
+\end{equation}
+If diffusion is anisotropic, replace scalar $D$ by a tensor $\bm{D}$:
+\begin{equation}
+K_{BA}^{(e)}=\int_{\Omega_e}(\nabla N_B)^T\bm{D}\nabla N_A\,dV.
+\end{equation}
+For a 1D linear element with constant $D$ and cross-sectional area $A_c$,
+\begin{equation}
+\bm{K}^{(e)}=\frac{A_cD}{h}
+\begin{bmatrix}
+1&-1\\
+-1&1
+\end{bmatrix}.
+\label{eq:fem_1d_stiffness}
+\end{equation}
+This matrix penalizes differences between neighboring nodal densities. If $n_1=n_2$, then $\bm{K}^{(e)}\bm{n}^{(e)}=0$, meaning no diffusion occurs inside an element with uniform density.
+
+\subsection{Element volume trap matrix}
+The linear volume sink $\Gamma n$ gives
+\begin{equation}
+\int_{\Omega_e}N_B\Gamma n_h\,dV
+=\sum_{A=1}^{n_{en}}\left[\int_{\Omega_e}N_B\Gamma N_A\,dV\right]n_A^{(e)}.
+\end{equation}
+Define
+\begin{equation}
+G_{BA}^{(e)}=\int_{\Omega_e}N_B\Gamma N_A\,dV.
+\label{eq:fem_qp_volume_trap_matrix}
+\end{equation}
+If $\Gamma$ is nonzero only in trap-tagged elements, then only those elements add this matrix. For a 1D linear element with constant $\Gamma$,
+\begin{equation}
+\bm{G}^{(e)}=\frac{A_c\Gamma h}{6}
+\begin{bmatrix}
+2&1\\
+1&2
+\end{bmatrix}.
+\end{equation}
+This looks like the mass matrix multiplied by a rate.
+
+\subsection{Element Robin trap boundary matrix}
+If trap capture is imposed on a boundary instead of inside a volume, the weak form contains
+\begin{equation}
+\int_{\Gamma_{\trap}^{(e)}}N_Bs_{\trap}n_h\,dA
+=\sum_{A=1}^{n_{en}}\left[\int_{\Gamma_{\trap}^{(e)}}N_Bs_{\trap}N_A\,dA\right]n_A^{(e)}.
+\end{equation}
+Define the boundary trap matrix
+\begin{equation}
+B_{BA}^{(e)}=\int_{\Gamma_{\trap}^{(e)}}N_Bs_{\trap}N_A\,dA.
+\label{eq:fem_qp_boundary_trap_matrix}
+\end{equation}
+In a 1D model where the right endpoint $x=x_2$ is a trap boundary, the boundary integral collapses to the endpoint value:
+\begin{equation}
+\bm{B}^{(e)}=A_c s_{\trap}
+\begin{bmatrix}
+0&0\\
+0&1
+\end{bmatrix}.
+\end{equation}
+This is the finite element version of saying that only the boundary node feels the endpoint sink.
+
+\subsection{Element source vector}
+The source term contributes
+\begin{equation}
+S_B^{(e)}=\int_{\Omega_e}N_BS\,dV
++\int_{\Gamma_N^{(e)}}N_Bg_N\,dA
++\int_{\Gamma_{\trap}^{(e)}}N_Bs_{\trap}n_{\trap}^{\eq}\,dA.
+\label{eq:fem_qp_source_vector}
+\end{equation}
+For a uniform volumetric source $S$ in a 1D linear element,
+\begin{equation}
+\bm{S}^{(e)}=\frac{A_chS}{2}
+\begin{bmatrix}
+1\\1
+\end{bmatrix}.
+\end{equation}
+For an impulsive energy deposition event with deposited energy $E_{\mathrm{dep}}$ at point $\br_p$, the number of generated quasiparticles may be modeled as
+\begin{equation}
+N_{\mathrm{gen}}=\eta_{\qp}\frac{E_{\mathrm{dep}}}{\Delta}.
+\end{equation}
+If the event occurs inside element $e$, distribute that particle number to the element nodes conservatively by
+\begin{equation}
+\Delta b_A^{(e)}=N_A(\br_p)N_{\mathrm{gen}}.
+\label{eq:fem_point_deposit_distribution}
+\end{equation}
+This update belongs on the right-hand side of the time-discrete equation, not as a continuous source unless the event is spread over a finite time window. The partition-of-unity property $\sum_A N_A=1$ guarantees that the total generated quasiparticle number is conserved at the element level.
+
+\subsection{Nonlinear recombination vector}
+The recombination contribution is nonlinear because it contains $n_h^2$:
+\begin{equation}
+F_{B}^{\rec,(e)}(\bm{n}^{(e)})
+=\int_{\Omega_e}N_B R\left[\left(\sum_{A=1}^{n_{en}}N_A n_A^{(e)}\right)^2-n_{\eq}^2\right]dV.
+\label{eq:fem_qp_recombination_vector}
+\end{equation}
+This is not a matrix times $\bm{n}$ unless it is linearized. The simplest exact assembly evaluates $n_h$ at quadrature points and accumulates the vector.
+
+For Newton's method, the local Jacobian of this nonlinear vector is
+\begin{equation}
+\frac{\partial F_B^{\rec,(e)}}{\partial n_C^{(e)}}
+=\int_{\Omega_e}N_B\,2R n_h\,N_C\,dV,
+\label{eq:fem_qp_recombination_jacobian}
+\end{equation}
+assuming $R$ and $n_{\eq}$ are held fixed during the Newton update. If $R(T)$ and $n_{\eq}(T)$ are coupled to temperature and temperature is solved simultaneously, extra Jacobian terms appear.
+
+\subsection{Numerical quadrature}
+Most element integrals cannot be evaluated analytically in a general 3D geometry. Use Gaussian quadrature. For a Hex8 element,
+\begin{equation}
+\int_{\Omega_e}f(\br)dV
+=\int_{-1}^{1}\int_{-1}^{1}\int_{-1}^{1}f(\br(\xi,\eta,\zeta))\det(\bm{J}_e)d\xi d\eta d\zeta
+\end{equation}
+is approximated by
+\begin{equation}
+\int_{\Omega_e}f(\br)dV
+\approx\sum_{q=1}^{N_q}w_q f(\br_q)\det(\bm{J}_e(\xi_q,\eta_q,\zeta_q)).
+\end{equation}
+At each quadrature point:
+\begin{enumerate}[leftmargin=1.6em]
+    \item evaluate shape functions $N_A$;
+    \item evaluate physical gradients $\nabla N_A$;
+    \item evaluate material coefficients $D,R,\Gamma,n_{\eq},S$ using the element material tag and local temperature;
+    \item add contributions to $M^{(e)},K^{(e)},G^{(e)},B^{(e)},S^{(e)}$, and $F^{\rec,(e)}$.
+\end{enumerate}
+For linear Hex8 elements, $2\times2\times2$ Gauss quadrature is a standard starting point for diffusion matrices. Nonlinear source terms can also use the same quadrature for consistency.
+
+\subsection{Element residual for the scalar model}
+Collecting the element contributions, the semi-discrete element residual for test node $B$ is
+\begin{equation}
+\mathcal{R}_B^{(e)}
+=\sum_A M_{BA}^{(e)}\dot n_A^{(e)}
++\sum_A\left(K_{BA}^{(e)}+G_{BA}^{(e)}+B_{BA}^{(e)}\right)n_A^{(e)}
++F_B^{\rec,(e)}(\bm{n}^{(e)})
+-S_B^{(e)}.
+\end{equation}
+The FEM equation is obtained by setting the assembled global residual to zero.
+
+\subsection{Global assembly}
+Each element has a connectivity map
+\begin{equation}
+I=\mathrm{conn}(e,A),\qquad J=\mathrm{conn}(e,B),
+\end{equation}
+where $A,B$ are local node indices and $I,J$ are global node indices. Assembly is the scatter-add operation
+\begin{align}
+M_{JI} &\mathrel{+}=M_{BA}^{(e)},\\
+K_{JI} &\mathrel{+}=K_{BA}^{(e)},\\
+G_{JI} &\mathrel{+}=G_{BA}^{(e)},\\
+B_{JI} &\mathrel{+}=B_{BA}^{(e)},\\
+S_J &\mathrel{+}=S_B^{(e)},\\
+F_J^{\rec} &\mathrel{+}=F_B^{\rec,(e)}.
+\end{align}
+After all elements and boundary faces are assembled, the global semi-discrete system is
+\begin{equation}
+\bm{M}\dot{\bm{n}}
++(\bm{K}+\bm{G}+\bm{B})\bm{n}
++\bm{F}^{\rec}(\bm{n})
+=\bm{S}(t).
+\label{eq:fem_qp_global_semidiscrete}
+\end{equation}
+This is the central algebraic object for Module 2 scalar quasiparticle transport.
+
+\subsection{Time discretization by implicit Euler}
+Let $\bm{n}^{k}$ denote the nodal vector at time $t_k$ and $\Delta t=t_{k+1}-t_k$. Implicit Euler approximates
+\begin{equation}
+\dot{\bm{n}}\approx\frac{\bm{n}^{k+1}-\bm{n}^{k}}{\Delta t}.
+\end{equation}
+Substituting into Eq.~\eqref{eq:fem_qp_global_semidiscrete} gives
+\begin{equation}
+\frac{1}{\Delta t}\bm{M}(\bm{n}^{k+1}-\bm{n}^{k})
++(\bm{K}+\bm{G}+\bm{B})\bm{n}^{k+1}
++\bm{F}^{\rec}(\bm{n}^{k+1})
+=\bm{S}^{k+1}.
+\label{eq:fem_qp_implicit_euler}
+\end{equation}
+The nonlinear residual to solve at each time step is
+\begin{equation}
+\bm{\mathcal{R}}(\bm{n}^{k+1})
+=\left(\frac{\bm{M}}{\Delta t}+\bm{K}+\bm{G}+\bm{B}\right)\bm{n}^{k+1}
++\bm{F}^{\rec}(\bm{n}^{k+1})
+-\left(\frac{\bm{M}}{\Delta t}\bm{n}^{k}+\bm{S}^{k+1}\right)
+=\bm{0}.
+\label{eq:fem_qp_nonlinear_residual}
+\end{equation}
+Newton's method solves
+\begin{equation}
+\bm{J}^{(\ell)}\delta\bm{n}^{(\ell)}=-\bm{\mathcal{R}}(\bm{n}^{(\ell)}),
+\qquad
+\bm{n}^{(\ell+1)}=\bm{n}^{(\ell)}+\delta\bm{n}^{(\ell)},
+\end{equation}
+where
+\begin{equation}
+\bm{J}^{(\ell)}=\frac{\bm{M}}{\Delta t}+\bm{K}+\bm{G}+\bm{B}
++\frac{\partial\bm{F}^{\rec}}{\partial\bm{n}}\bigg|_{\bm{n}^{(\ell)}}.
+\label{eq:fem_qp_newton_jacobian}
+\end{equation}
+
+\subsection{Picard linearization as a simpler first implementation}
+Newton's method is accurate and fast near convergence, but the first code can use a Picard linearization. Replace
+\begin{equation}
+n^2\approx n^{\mathrm{old}}n^{\mathrm{new}}.
+\end{equation}
+Then recombination becomes a linear reaction matrix for the current iteration:
+\begin{equation}
+C_{BA}^{\rec,(e)}=\int_{\Omega_e}N_B R n_h^{\mathrm{old}}N_A\,dV,
+\end{equation}
+and the equilibrium source term becomes
+\begin{equation}
+Q_B^{\eq,(e)}=\int_{\Omega_e}N_B R n_{\eq}^2\,dV.
+\end{equation}
+The linearized solve is
+\begin{equation}
+\left(\frac{\bm{M}}{\Delta t}+\bm{K}+\bm{G}+\bm{B}+\bm{C}^{\rec}\right)\bm{n}^{\mathrm{new}}
+=\frac{\bm{M}}{\Delta t}\bm{n}^{k}+\bm{S}^{k+1}+\bm{Q}^{\eq}.
+\end{equation}
+Iterate until the relative change in $\bm{n}$ is below a tolerance. This method is often sufficient for early parameter sweeps.
+
+\subsection{Dirichlet boundary conditions}
+A prescribed density boundary $n=\bar n$ is useful for manufactured-solution tests or reservoir-like models. Suppose global node $I$ is Dirichlet. A robust implementation modifies the linear system by setting
+\begin{equation}
+A_{II}=1,
+\qquad A_{IJ}=0\quad(J\ne I),
+\qquad b_I=\bar n_I.
+\end{equation}
+If symmetry of the matrix is important, subtract the known contribution from other rows before zeroing the column:
+\begin{equation}
+b_J\leftarrow b_J-A_{JI}\bar n_I,
+\qquad A_{JI}\leftarrow0 \quad (J\ne I).
+\end{equation}
+For quasiparticle physics, Dirichlet density should be used carefully. A physical trap is usually better represented by a Robin condition or a finite volume trap region because it removes quasiparticles at a finite rate rather than imposing an infinite reservoir instantly.
+
+\subsection{Material interfaces}
+If two materials share nodes in a conforming mesh, the standard FEM assembly naturally enforces weak flux continuity. The diffusion coefficient is evaluated element by element:
+\begin{equation}
+D(\br)=
+\begin{cases}
+D_1,& \br\in\Omega_1,\\
+D_2,& \br\in\Omega_2.
+\end{cases}
+\end{equation}
+The weak form implies the interface condition
+\begin{equation}
+-D_1\nabla n_1\cdot\nvec_1
+= D_2\nabla n_2\cdot\nvec_2,
+\end{equation}
+which is conservation of normal flux across the interface. If the interface is a quasiparticle trap or a gap-step barrier, add an explicit interface Robin law instead of simply sharing nodes.
+
+A more physical interface law between a superconductor and a normal-metal trap can be written as
+\begin{equation}
+-D_s\nabla n_s\cdot\nvec=s_{sn}(n_s-\alpha n_n),
+\end{equation}
+where $\alpha$ maps the normal-metal density variable into the superconducting density convention. In the reduced model used here, the normal metal is often not solved explicitly, and the law reduces to Eq.~\eqref{eq:fem_qp_robin} with $n_{\trap}^{\eq}\approx0$.
+
+\subsection{Solving for nodal values and reconstructing the field}
+After applying boundary conditions and solving the algebraic system, the output is a vector of nodal values:
+\begin{equation}
+\bm{n}^{k}=\{n_1^k,n_2^k,\ldots,n_{N_n}^k\}^T.
+\end{equation}
+The continuous approximation inside each element is reconstructed by
+\begin{equation}
+n_h^{(e)}(\br,t_k)=\sum_{A=1}^{n_{en}}N_A^{(e)}(\br)n_{\mathrm{conn}(e,A)}^k.
+\label{eq:fem_qp_reconstructed_field}
+\end{equation}
+The quasiparticle flux is reconstructed from gradients:
+\begin{equation}
+\bm{J}_{\qp,h}^{(e)}(\br,t_k)=-D(\br)\sum_A n_A^k\nabla N_A^{(e)}(\br).
+\label{eq:fem_qp_reconstructed_flux}
+\end{equation}
+For linear elements, the gradient is constant inside each element if the element is affine. For visualization, fluxes can be evaluated at quadrature points, element centers, or projected to nodes.
+
+\subsection{Device metric: junction exposure from FEM fields}
+The superconducting physics becomes useful for device design when it is reduced to metrics. A simple Josephson-junction exposure metric is
+\begin{equation}
+\mathcal{I}_{\JJ}
+=\int_0^{t_f}\int_{\Omega_{\JJ}}w_{\JJ}(\br)n_h(\br,t)dVdt.
+\end{equation}
+With time steps and quadrature, approximate this by
+\begin{equation}
+\mathcal{I}_{\JJ}
+\approx\sum_{k=0}^{N_t-1}\Delta t_k
+\sum_{e\in\Omega_{\JJ}}\sum_{q=1}^{N_q}
+ w_{\JJ}(\br_{eq}) n_h(\br_{eq},t_k) W_{eq},
+\end{equation}
+where
+\begin{equation}
+W_{eq}=w_q\det(\bm{J}_e(\xi_q,\eta_q,\zeta_q)).
+\end{equation}
+This is the FEM bridge from local Module 2 physics to qubit-design optimization: traps, geometry, shielding, and material choices are compared by how much they reduce the time-integrated quasiparticle density near the junction.
+
+\subsection{Worked 1D scalar quasiparticle element}
+Consider a 1D superconducting strip of cross-sectional area $A_c$ and one two-node element of length $h$. Assume constant $D,\Gamma,R,S$ and ignore boundary trapping. The element equation is
+\begin{equation}
+\frac{A_ch}{6}
+\begin{bmatrix}2&1\\1&2\end{bmatrix}
+\begin{bmatrix}\dot n_1\\\dot n_2\end{bmatrix}
++\frac{A_cD}{h}
+\begin{bmatrix}1&-1\\-1&1\end{bmatrix}
+\begin{bmatrix}n_1\\n_2\end{bmatrix}
++\frac{A_c\Gamma h}{6}
+\begin{bmatrix}2&1\\1&2\end{bmatrix}
+\begin{bmatrix}n_1\\n_2\end{bmatrix}
++\bm{F}^{\rec}
+=\frac{A_chS}{2}
+\begin{bmatrix}1\\1\end{bmatrix}.
+\end{equation}
+If the right endpoint is a trap boundary, add
+\begin{equation}
+A_cs_{\trap}
+\begin{bmatrix}0&0\\0&1\end{bmatrix}
+\begin{bmatrix}n_1\\n_2\end{bmatrix}
+\end{equation}
+to the left-hand side. This small equation is the one-element version of the full 3D solver.
+
+\subsection{Spatial Rothwarf-Taylor system: strong form}
+The next Module 2 fidelity level solves both quasiparticles and pair-breaking phonons. Let
+\begin{equation}
+ n(\br,t)=n_{\qp}(\br,t),\qquad m(\br,t)=n_{\Omega}(\br,t).
+\end{equation}
+The strong form is
+\begin{equation}
+\frac{\partial n}{\partial t}
+=\nabla\cdot(D_n\nabla n)-Rn^2+2\beta m-\Gamma n+S_n,
+\label{eq:fem_rt_strong_n}
+\end{equation}
+\begin{equation}
+\frac{\partial m}{\partial t}
+=\nabla\cdot(D_m\nabla m)+\frac{1}{2}Rn^2-\beta m-\frac{m}{\tau_{\esc}}+S_m.
+\label{eq:fem_rt_strong_m}
+\end{equation}
+The factors $2$ and $1/2$ come from counting. One pair-breaking phonon creates two quasiparticles; two quasiparticles recombine into roughly one pair-breaking phonon.
+
+\subsection{Spatial Rothwarf-Taylor weak form}
+Use test functions $w$ for $n$ and $z$ for $m$. Applying the same integration-by-parts step gives
+\begin{align}
+\int_{\Omega}w\frac{\partial n}{\partial t}dV
+&+\int_{\Omega}\nabla w\cdot D_n\nabla n\,dV
++\int_{\Omega}wRn^2dV
++\int_{\Omega}w\Gamma n\,dV
++\int_{\Gamma_{\trap}}ws_{\trap}n\,dA \nonumber\\
+&=\int_{\Omega}w(2\beta m+S_n)dV
++\int_{\Gamma_N^n}w g_n\,dA,
+\label{eq:fem_rt_weak_n}
+\end{align}
+\begin{align}
+\int_{\Omega}z\frac{\partial m}{\partial t}dV
+&+\int_{\Omega}\nabla z\cdot D_m\nabla m\,dV
++\int_{\Omega}z\left(\beta+\frac{1}{\tau_{\esc}}\right)m\,dV
++\int_{\Gamma_{\Omega}}z s_{\Omega}m\,dA \nonumber\\
+&=\int_{\Omega}z\left(\frac{1}{2}Rn^2+S_m\right)dV
++\int_{\Gamma_N^m}z g_m\,dA.
+\label{eq:fem_rt_weak_m}
+\end{align}
+A volume escape time $\tau_{\esc}$ and a boundary escape velocity $s_{\Omega}$ should not both be used for the same physical escape path unless the model intentionally includes both independent mechanisms.
+
+\subsection{Block finite element matrices for spatial RT}
+Use the same shape functions for both fields:
+\begin{equation}
+n_h=\sum_A N_A n_A,
+\qquad
+m_h=\sum_A N_A m_A.
+\end{equation}
+Define
+\begin{align}
+M^n_{BA}&=\int_{\Omega}N_BN_A\,dV,&
+K^n_{BA}&=\int_{\Omega}\nabla N_B\cdot D_n\nabla N_A\,dV,\\
+M^m_{BA}&=\int_{\Omega}N_BN_A\,dV,&
+K^m_{BA}&=\int_{\Omega}\nabla N_B\cdot D_m\nabla N_A\,dV.
+\end{align}
+The linear quasiparticle trap matrix is
+\begin{equation}
+G^n_{BA}=\int_{\Omega}N_B\Gamma N_A\,dV+\int_{\Gamma_{\trap}}N_Bs_{\trap}N_A\,dA.
+\end{equation}
+The phonon loss matrix is
+\begin{equation}
+G^m_{BA}=\int_{\Omega}N_B\left(\beta+\frac{1}{\tau_{\esc}}\right)N_A\,dV
++\int_{\Gamma_{\Omega}}N_Bs_{\Omega}N_A\,dA.
+\end{equation}
+The pair-breaking coupling matrix is
+\begin{equation}
+P_{BA}=\int_{\Omega}N_B\,2\beta\,N_A\,dV,
+\end{equation}
+and the recombination vector is
+\begin{equation}
+F_B^R(\bm{n})=\int_{\Omega}N_BRn_h^2\,dV.
+\end{equation}
+The semi-discrete block system is
+\begin{align}
+\bm{M}^n\dot{\bm{n}}+\bm{K}^n\bm{n}+\bm{G}^n\bm{n}+\bm{F}^R(\bm{n})-\bm{P}\bm{m}&=\bm{S}^n,\\
+\bm{M}^m\dot{\bm{m}}+\bm{K}^m\bm{m}+\bm{G}^m\bm{m}-\frac{1}{2}\bm{F}^R(\bm{n})&=\bm{S}^m.
+\end{align}
+In compact form, with $\bm{y}=[\bm{n};\bm{m}]$, this is a coupled nonlinear ODE system:
+\begin{equation}
+\bm{M}_{RT}\dot{\bm{y}}+\bm{A}_{RT}\bm{y}+\bm{F}_{RT}(\bm{y})=\bm{b}_{RT}.
+\end{equation}
+
+\subsection{Implicit solve for the spatial RT system}
+At time $t_{k+1}$, the residuals are
+\begin{align}
+\mathcal{R}^n
+&=\frac{\bm{M}^n}{\Delta t}(\bm{n}^{k+1}-\bm{n}^{k})
++\bm{K}^n\bm{n}^{k+1}+\bm{G}^n\bm{n}^{k+1}
++\bm{F}^{R}(\bm{n}^{k+1})
+-\bm{P}\bm{m}^{k+1}-\bm{S}^{n,k+1},\\
+\mathcal{R}^m
+&=\frac{\bm{M}^m}{\Delta t}(\bm{m}^{k+1}-\bm{m}^{k})
++\bm{K}^m\bm{m}^{k+1}+\bm{G}^m\bm{m}^{k+1}
+-\frac{1}{2}\bm{F}^{R}(\bm{n}^{k+1})
+-\bm{S}^{m,k+1}.
+\end{align}
+The Newton Jacobian has block structure
+\begin{equation}
+\bm{J}_{RT}=\begin{bmatrix}
+\frac{\bm{M}^n}{\Delta t}+\bm{K}^n+\bm{G}^n+\bm{J}_R & -\bm{P}\\
+-\frac{1}{2}\bm{J}_R & \frac{\bm{M}^m}{\Delta t}+\bm{K}^m+\bm{G}^m
+\end{bmatrix},
+\end{equation}
+where
+\begin{equation}
+(\bm{J}_R)_{BC}=\int_{\Omega}N_B\,2Rn_h\,N_C\,dV.
+\end{equation}
+This block form is useful for debugging because each physical process occupies a recognizable part of the matrix: diffusion on the diagonal blocks, pair-breaking coupling in the off-diagonal $n$ equation, and recombination coupling in both equations.
+
+\subsection{Thermal coupling as an optional third field}
+A coupled temperature-quasiparticle-phonon model adds the heat equation
+\begin{equation}
+C(T)\frac{\partial T}{\partial t}=\nabla\cdot(k(T)\nabla T)+Q_{\mathrm{abs}}+Q_{\rec}-Q_{\esc}.
+\label{eq:fem_temperature_strong_module2}
+\end{equation}
+In residual form,
+\begin{equation}
+C(T)\frac{\partial T}{\partial t}-\nabla\cdot(k(T)\nabla T)-Q_{\mathrm{abs}}-Q_{\rec}+Q_{\esc}=0.
+\end{equation}
+The weak form is
+\begin{align}
+\int_{\Omega}v C(T)\frac{\partial T}{\partial t}dV
++\int_{\Omega}\nabla v\cdot k(T)\nabla T\,dV
+&=\int_{\Omega}v\left(Q_{\mathrm{abs}}+Q_{\rec}-Q_{\esc}\right)dV \\
+&+\int_{\Gamma_q}v q_N\,dA,
+\end{align}
+where $q_N$ is prescribed outward or inward heat flux according to the sign convention used in Module 1. The thermal element matrices are
+\begin{equation}
+M^T_{BA}=\int_{\Omega_e}N_B C(T)N_A\,dV,
+\qquad
+K^T_{BA}=\int_{\Omega_e}\nabla N_B\cdot k(T)\nabla N_A\,dV.
+\end{equation}
+The coupling enters through source terms and coefficients:
+\begin{align}
+\Delta&=\Delta(T),\\
+n_{\eq}&=n_{\qp}^{\eq}(T),\\
+D&=D_{\qp}(T),\\
+R&=R(T),\\
+Q_{\rec}&\approx \Delta(T)R(T)n^2,\\
+Q_{\esc}&\approx \frac{2\Delta(T)m}{\tau_{\esc}}.
+\end{align}
+The most stable implementation strategy is staggered coupling:
+\begin{enumerate}[leftmargin=1.6em]
+    \item solve the heat problem or import $T^{k+1}$ from Module 1;
+    \item update $\Delta(T),n_{\eq}(T),D(T),R(T)$ at quadrature points;
+    \item solve the quasiparticle or RT system;
+    \item update heating terms if two-way coupling is enabled;
+    \item repeat until the coupled fields stop changing appreciably.
+\end{enumerate}
+A fully monolithic solve is possible, but it requires derivatives of all material functions with respect to $T$ and is not necessary for the first version.
+
+\subsection{How to implement the scalar Module 2 FEM solver}
+A minimal implementation follows this chain:
+\begin{enumerate}[leftmargin=1.6em]
+    \item \textbf{Build the mesh.} Store node coordinates, element connectivity, element material tags, and boundary-face tags.
+    \item \textbf{Initialize nodal fields.} Set $\bm{n}^0$ from an initial condition, an event distribution, or equilibrium density.
+    \item \textbf{Loop over elements.} At each quadrature point, compute $N_A$, $\nabla N_A$, $D$, $R$, $\Gamma$, $n_{\eq}$, and $S$.
+    \item \textbf{Assemble matrices.} Add $M^{(e)}$, $K^{(e)}$, $G^{(e)}$, and source contributions into global sparse arrays.
+    \item \textbf{Loop over boundary faces.} Add Robin trap matrices and flux/source vectors.
+    \item \textbf{Step forward in time.} Build the implicit residual and solve with Picard or Newton iteration.
+    \item \textbf{Enforce nonnegativity.} Check that $n_i\ge0$. If needed, reduce the time step, use damping, or apply a positivity-preserving split update.
+    \item \textbf{Postprocess.} Reconstruct $n_h$, compute $\bm{J}_{\qp,h}$, total quasiparticle number, trap removal rate, and junction exposure.
+\end{enumerate}
+
+\subsection{Conservation checks}
+A good FEM implementation should pass integral checks. Define the total quasiparticle number
+\begin{equation}
+N_{\qp,h}(t)=\int_{\Omega}n_h(\br,t)dV\approx\bm{1}^T\bm{M}_{\mathrm{lump}}\bm{n}(t).
+\end{equation}
+From the PDE,
+\begin{align}
+\frac{dN_{\qp}}{dt}
+&=\int_{\Omega}S\,dV
+-\int_{\Omega}R(n^2-n_{\eq}^2)dV
+-\int_{\Omega}\Gamma n\,dV
+-\int_{\Gamma_{\trap}}s_{\trap}(n-n_{\trap}^{\eq})dA
+-\int_{\Gamma_N}g_N\,dA.
+\end{align}
+Pure diffusion with no-flux boundaries should conserve total quasiparticle number. If it does not, the sign of a boundary term, connectivity, or assembly operation is probably wrong.
+
+\subsection{Manufactured-solution test}
+Before using the model on a transmon geometry, test it on a simple domain where an exact solution is prescribed. Let
+\begin{equation}
+n_{\mathrm{ex}}(x,t)=n_0+A\sin(\pi x/L)e^{-\lambda t}
+\end{equation}
+on $0<x<L$ with Dirichlet boundaries. Insert this function into the strong residual and define the required source:
+\begin{equation}
+S_{\mathrm{MMS}}=\frac{\partial n_{\mathrm{ex}}}{\partial t}
+-\frac{\partial}{\partial x}\left(D\frac{\partial n_{\mathrm{ex}}}{\partial x}\right)
++R(n_{\mathrm{ex}}^2-n_{\eq}^2)+\Gamma n_{\mathrm{ex}}.
+\end{equation}
+If the code is correct, the numerical solution should converge to $n_{\mathrm{ex}}$ as the mesh is refined and the time step is reduced. This is a stronger test than only checking whether plots look plausible.
+
+\section{Nondimensionalization and time scales}
+
+\subsection{Dimensionless variables}
+Choose a length scale $L$, density scale $n_*$, and time scale
+\begin{equation}
+ t_D=\frac{L^2}{D_{\qp}}.
+\end{equation}
+Define
+\begin{equation}
+\hat \br=\frac{\br}{L},\qquad \hat t=\frac{t}{t_D},\qquad \hat n=\frac{n}{n_*}.
+\end{equation}
+For the scalar PDE with constant coefficients,
+\begin{equation}
+\frac{\partial \hat n}{\partial \hat t}=\hat\nabla^2\hat n
+-\underbrace{(R n_* t_D)}_{\mathrm{Da}_R}\hat n^2
+-\underbrace{(\Gamma t_D)}_{\mathrm{Da}_\Gamma}\hat n
++\hat S.
+\end{equation}
+The dimensionless groups are Damkohler-like ratios comparing reaction and trapping to diffusion:
+\begin{equation}
+\mathrm{Da}_R=R n_*\frac{L^2}{D_{\qp}},
+\qquad
+\mathrm{Da}_\Gamma=\Gamma\frac{L^2}{D_{\qp}}.
+\end{equation}
+If $\mathrm{Da}_\Gamma\gg1$, trapping is fast compared with diffusion over length $L$. If $\mathrm{Da}_R\ll1$, recombination is weak over the diffusion time.
+
+\subsection{Diffusion length before trapping or recombination}
+A first-order trap rate gives a trap diffusion length
+\begin{equation}
+\ell_{\trap}=\sqrt{\frac{D_{\qp}}{\Gamma_{\trap}}}.
+\end{equation}
+For recombination around a representative density $n_*$, the effective recombination time is roughly
+\begin{equation}
+\tau_{\rec,*}\sim\frac{1}{R n_*},
+\end{equation}
+so a recombination diffusion length is
+\begin{equation}
+\ell_{\rec}\sim\sqrt{\frac{D_{\qp}}{R n_*}}.
+\end{equation}
+These lengths are useful for sanity-checking trap placement. If traps are much farther away than the relevant diffusion length, they will not strongly reduce junction exposure on that time scale.
+
+\section{Reduced material parameter hierarchy}
+
+\subsection{Minimum parameters for the first working model}
+The first 3D implementation needs only:
+\begin{equation}
+D_{\qp},\qquad R,
+\qquad \Gamma_{\trap}(\br),
+\qquad S_{\qp}(\br,t),
+\qquad n_{\qp}(\br,0).
+\end{equation}
+If equilibrium density is negligible relative to injected nonequilibrium density, use $n_{\qp}^{\eq}=0$ initially. This is often numerically and conceptually cleaner for pulse studies.
+
+\subsection{Temperature-dependent upgrade}
+The next level computes
+\begin{equation}
+\Delta(T),\qquad n_{\qp}^{\eq}(T),\qquad D_{\qp}(T),\qquad R(T),\qquad \eta_{\qp}(T).
+\end{equation}
+The helper functions in \texttt{matlab/src/module2\_superconducting} correspond to this level. The gap helper provides $\Delta(T)$; the equilibrium density helper evaluates Eq.~\eqref{eq:neq_final}; the recombination and diffusivity helpers provide reduced coefficients.
+
+\subsection{Nonequilibrium phonon upgrade}
+The spatial RT level adds
+\begin{equation}
+D_{\Omega},\qquad \beta,
+\qquad \tau_{\esc}(\br),
+\qquad S_{\Omega}(\br,t).
+\end{equation}
+Here $\tau_{\esc}$ is especially geometry-dependent. Thin films, substrate contact, acoustic mismatch, and added normal-metal layers can all change phonon escape and down-conversion.
+
+\section{Connection to ballistic-diffusive heat transport}
+
+\subsection{Heat equation as an energy conservation law}
+A heat equation can be written as
+\begin{equation}
+C\frac{\partial T}{\partial t}+\nabla\cdot\bm{q}=Q,
+\end{equation}
+where $C$ is volumetric heat capacity and $\bm{q}$ is heat flux. Fourier diffusion uses
+\begin{equation}
+\bm{q}=-k\nabla T.
+\end{equation}
+Ballistic-diffusive or Cattaneo-type models modify the flux relation when carrier mean free path or relaxation time is not negligible.
+
+Module 2 does not replace Module 1. It changes the coefficients and adds quasiparticle-specific degrees of freedom. For example, if Module 1 gives $T(\br,t)$, Module 2 maps it into $\Delta(T)$ and $n_{\qp}^{\eq}(T)$.
+
+\subsection{Two-way coupling terms}
+A two-way thermal-quasiparticle model can include recombination heating and phonon escape:
+\begin{equation}
+C_s(T)\frac{\partial T}{\partial t}=\nabla\cdot(k_s(T)\nabla T)+Q_{\mathrm{abs}}+Q_{\rec}-Q_{\esc}.
+\end{equation}
+A rough near-gap recombination energy source is
+\begin{equation}
+Q_{\rec}\approx \Delta Rn_{\qp}^2,
+\end{equation}
+if the energy is retained locally, while pair-breaking phonon escape removes
+\begin{equation}
+Q_{\esc}\approx\frac{2\Delta n_{\Omega}}{\tau_{\esc}}.
+\end{equation}
+These terms should be used cautiously because recombination energy may first appear in high-energy phonons rather than immediately thermalized heat.
+
+\section{Boundary and interface physics}
+
+\subsection{No-flux boundary}
+For a superconducting region surrounded by vacuum or an insulating boundary with no quasiparticle transfer,
+\begin{equation}
+\bm{J}_{\qp}\cdot\nvec=0,
+\qquad
+-D_{\qp}\nabla n_{\qp}\cdot\nvec=0.
+\end{equation}
+This does not mean phonons cannot cross the boundary; it only describes quasiparticle number flux in the superconducting film.
+
+\subsection{Material interface}
+At an interface between two superconducting regions, impose continuity of density or chemical potential depending on the model, and continuity of flux:
+\begin{equation}
+ n_1=n_2,
+\qquad
+-D_1\nabla n_1\cdot\nvec=-D_2\nabla n_2\cdot\nvec.
+\end{equation}
+If gaps differ, the correct interface condition can involve energy-dependent transmission and trapping. The simple continuity model is a first approximation.
+
+\subsection{Trap boundary}
+At a trap boundary,
+\begin{equation}
+-D_{\qp}\nabla n_{\qp}\cdot\nvec=s_{\trap}(n_{\qp}-n_{\trap}^{\eq}).
+\end{equation}
+If the trap is a strong reservoir with negligible quasiparticle chemical potential, set $n_{\trap}^{\eq}=0$ for excess density. For absolute density, use the equilibrium density appropriate to the trap material and temperature.
+
+\subsection{Phonon escape boundary}
+For pair-breaking phonons, a boundary escape condition can be modeled as
+\begin{equation}
+-D_{\Omega}\nabla n_{\Omega}\cdot\nvec=s_{\Omega}n_{\Omega},
+\end{equation}
+or as a volume escape time $-n_{\Omega}/\tau_{\esc}$. The volume escape model is easier when the film thickness is not explicitly meshed.
+
+\section{Numerical stability and positivity}
+
+\subsection{Why positivity matters}
+Densities must remain nonnegative. Explicit time stepping of diffusion and nonlinear reaction can produce negative values if the time step is too large. For a mesh spacing $h$, explicit diffusion roughly requires
+\begin{equation}
+\Delta t\lesssim \frac{h^2}{2dD}
+\end{equation}
+in $d$ dimensions. Reaction adds constraints such as
+\begin{equation}
+\Delta t\lesssim\frac{1}{Rn_{\max}+\Gamma_{\max}}.
+\end{equation}
+Implicit methods are more stable but still require nonlinear solves and positivity checks.
+
+\subsection{Operator splitting}
+One practical approach is splitting:
+\begin{enumerate}[leftmargin=1.6em]
+    \item diffuse implicitly;
+    \item apply trap decay exactly:
+    \begin{equation}
+    n\leftarrow n e^{-\Gamma\Delta t};
+    \end{equation}
+    \item apply recombination analytically for $dn/dt=-Rn^2$:
+    \begin{equation}
+    n\leftarrow\frac{n}{1+Rn\Delta t};
+    \end{equation}
+    \item add source using a positivity-preserving rule.
+\end{enumerate}
+This is not the only method, but it is robust for early development and unit testing.
+
+\section{PINN residuals for Module 4}
+
+\subsection{Scalar quasiparticle residual}
+A PINN surrogate can enforce the PDE through a residual
+\begin{equation}
+\mathcal{R}_{\qp}
+=\frac{\partial n_{\theta}}{\partial t}
+-\nabla\cdot(D_{\qp}\nabla n_{\theta})
++R(n_{\theta}^2-n_{\eq}^2)
++\Gamma_{\trap}n_{\theta}
+-S_{\qp}.
+\end{equation}
+The physics loss is
+\begin{equation}
+\mathcal{L}_{\mathrm{PDE}}=\frac{1}{N_c}\sum_{i=1}^{N_c}|\mathcal{R}_{\qp}(\br_i,t_i)|^2,
+\end{equation}
+where $(\br_i,t_i)$ are collocation points.
+
+\subsection{Boundary and metric losses}
+No-flux boundaries use
+\begin{equation}
+\mathcal{R}_{\partial\Omega}=-D_{\qp}\nabla n_{\theta}\cdot\nvec.
+\end{equation}
+Trap Robin boundaries use
+\begin{equation}
+\mathcal{R}_{\trap}=-D_{\qp}\nabla n_{\theta}\cdot\nvec-s_{\trap}n_{\theta}.
+\end{equation}
+A device metric loss can train directly on junction exposure:
+\begin{equation}
+\mathcal{I}_{\JJ,\theta}=\int_0^{t_f}\int_{\JJvol}w_{\JJ}(\br)n_{\theta}(\br,t)dVdt.
+\end{equation}
+This connects Module 2 physics to design optimization.
+
+\section{Recommended implementation roadmap}
+
+\subsection{Level 0: coefficient sanity checks}
+Before solving PDEs, verify helper functions:
+\begin{enumerate}[leftmargin=1.6em]
+    \item $\Delta(T)$ decreases with $T$ and vanishes near $T_c$.
+    \item $n_{\qp}^{\eq}(T)$ is exponentially small at low $T$ and increases rapidly with $T$.
+    \item $D_{\qp}$ and $R$ have correct units and plausible magnitudes.
+    \item Source conversion $S_{\qp}=\eta Q_{\mathrm{abs}}/\Delta$ has units $\mathrm{m}^{-3}\mathrm{s}^{-1}$.
+\end{enumerate}
+
+\subsection{Level 1: scalar diffusion-reaction-trapping}
+Solve Eq.~\eqref{eq:central_qp_pde} on a simple 1D or 2D domain first. Test cases should include:
+\begin{enumerate}[leftmargin=1.6em]
+    \item pure diffusion of a Gaussian pulse;
+    \item uniform recombination decay $n(t)=n_0/(1+Rn_0t)$;
+    \item pure trap exponential decay;
+    \item diffusion to a trap with expected reduction in junction exposure.
+\end{enumerate}
+Only after these pass should the equation be moved into full 3D transmon geometry.
+
+\subsection{Level 2: temperature dependence}
+Use Module 1 or a prescribed temperature field to update $\Delta(T)$ and $n_{\qp}^{\eq}(T)$. A useful test is a localized thermal pulse that temporarily increases $n_{\qp}^{\eq}$ and then relaxes.
+
+\subsection{Level 3: spatial Rothwarf-Taylor}
+Add $n_{\Omega}$ and solve Eq.~\eqref{eq:spatial_rt_qp}--\eqref{eq:spatial_rt_ph}. Verify the lumped limit by using a spatially uniform domain and comparing against the ODE solution.
+
+\subsection{Level 4: coupled heat, QP, and phonon escape}
+Finally, couple to heat transport. This is the highest-fidelity planned Module 2 model:
+\begin{align}
+C\frac{\partial T}{\partial t}&=\nabla\cdot(k\nabla T)+Q_{\mathrm{abs}}+Q_{\rec}-Q_{\esc},\\
+\frac{\partial n_{\qp}}{\partial t}&=\nabla\cdot(D_{\qp}\nabla n_{\qp})-Rn_{\qp}^2+2\beta n_{\Omega}-\Gamma n_{\qp}+S_{\qp},\\
+\frac{\partial n_{\Omega}}{\partial t}&=\nabla\cdot(D_{\Omega}\nabla n_{\Omega})+\frac{1}{2}Rn_{\qp}^2-\beta n_{\Omega}-\frac{n_{\Omega}}{\tau_{\esc}}+S_{\Omega}.
+\end{align}
+This is sufficiently rich for serious geometry studies while remaining far simpler than microscopic kinetic theory.
+
+\section{Common conceptual mistakes}
+
+\subsection{Mistake 1: confusing $\Delta$ with a semiconductor band gap}
+The superconducting gap is a many-body excitation gap around the Fermi surface. It is not a valence-to-conduction band gap. A superconductor such as aluminum is a metal in the normal state.
+
+\subsection{Mistake 2: thinking the Cooper pair is a tiny rigid molecule}
+In weak-coupling BCS superconductors, Cooper pairs are large and overlapping. The condensate is a coherent many-body state. The pair language is useful, but the particles are not isolated molecules flying through the lattice.
+
+\subsection{Mistake 3: assuming recombination always removes energy}
+Recombination removes quasiparticles, but it emits high-energy phonons. If those phonons break pairs again, the net quasiparticle decay is slowed.
+
+\subsection{Mistake 4: assuming all absorbed energy becomes quasiparticles}
+Energy can become hot electrons, pair-breaking phonons, sub-gap phonons, substrate heat, or escaped radiation. The efficiency $\eta_{\qp}$ is a reduced parameter, not a universal constant.
+
+\subsection{Mistake 5: using a trap without considering microwave and proximity effects}
+A trap can reduce quasiparticle density but degrade microwave performance if placed poorly. The optimization target is not maximum trap strength everywhere; it is minimum junction exposure subject to preserving qubit quality.
+
+\section{Derivation summary of the equations used in code}
+
+\subsection{Gap model}
+Starting from the BCS mean-field Hamiltonian and self-consistency,
+\begin{equation}
+1=V N_0\int_0^{\hbar\omega_D}
+\frac{\tanh\left(\sqrt{\xi^2+\Delta(T)^2}/(2\kB T)\right)}
+{\sqrt{\xi^2+\Delta(T)^2}}d\xi.
+\end{equation}
+For engineering use,
+\begin{equation}
+\Delta(T)\approx\Delta_0\tanh\left[1.74\sqrt{\frac{T_c}{T}-1}\right],
+\qquad \Delta_0\approx1.764\kB T_c.
+\end{equation}
+
+\subsection{Equilibrium quasiparticle density}
+Starting from the BCS density of states and Boltzmann approximation,
+\begin{equation}
+ n_{\qp}^{\eq}(T)\approx 2N_0\sqrt{2\pi\kB T\Delta(T)}\exp\left[-\frac{\Delta(T)}{\kB T}\right].
+\end{equation}
+
+\subsection{Scalar QP PDE}
+Starting from continuity plus Fick diffusion, two-body recombination, first-order trapping, and source generation,
+\begin{equation}
+\frac{\partial n_{\qp}}{\partial t}
+=\nabla\cdot(D_{\qp}\nabla n_{\qp})
+-R\left(n_{\qp}^2-(n_{\qp}^{\eq})^2\right)
+-\Gamma_{\trap}n_{\qp}+S_{\qp}.
+\end{equation}
+
+\subsection{Spatial RT PDE}
+Starting from pair counting for recombination and pair-breaking phonons,
+\begin{equation}
+\frac{\partial n_{\qp}}{\partial t}
+=\nabla\cdot(D_{\qp}\nabla n_{\qp})-R n_{\qp}^2+2\beta n_{\Omega}-\Gamma_{\trap}n_{\qp}+S_{\qp},
+\end{equation}
+\begin{equation}
+\frac{\partial n_{\Omega}}{\partial t}
+=\nabla\cdot(D_{\Omega}\nabla n_{\Omega})+\frac{1}{2}R n_{\qp}^2-\beta n_{\Omega}-\frac{n_{\Omega}}{\tau_{\esc}}+S_{\Omega}.
+\end{equation}
+
+\section{Appendix A: Minimal quantum-statistical identities}
+
+\subsection{Fermi and Bose occupation}
+Fermions obey
+\begin{equation}
+ f(E)=\frac{1}{e^{(E-\mu)/(\kB T)}+1}.
+\end{equation}
+Bosons such as phonons obey
+\begin{equation}
+ n_B(\omega)=\frac{1}{e^{\hbar\omega/(\kB T)}-1}.
+\end{equation}
+The difference in signs is not cosmetic. Fermions cannot pile into one state; bosons can. Superconductivity is subtle because the condensate is made of paired fermions whose collective pair degree of freedom behaves coherently.
+
+\subsection{Fermi's golden rule as the origin of rates}
+Many coefficients in this note are reduced versions of rates computed from Fermi's golden rule:
+\begin{equation}
+W_{i\to f}=\frac{2\pi}{\hbar}|\langle f|H'|i\rangle|^2\delta(E_f-E_i).
+\end{equation}
+The matrix element gives transition strength. The delta function enforces energy conservation. Summing over final states produces density-of-states factors. Recombination coefficient $R$, pair-breaking rate $\beta$, electron-phonon transfer coefficient $\Sigma$, and trap capture rates can all be viewed as reduced golden-rule outputs.
+
+\section{Appendix B: Units checklist}
+\begin{longtable}{p{0.30\textwidth}p{0.25\textwidth}p{0.35\textwidth}}
+\toprule
+Quantity & SI units & Comment \\
+\midrule
+$n_{\qp}$ & $\mathrm{m^{-3}}$ & quasiparticle density \\
+$S_{\qp}$ & $\mathrm{m^{-3}s^{-1}}$ & source rate density \\
+$D_{\qp}$ & $\mathrm{m^2s^{-1}}$ & diffusion coefficient \\
+$R$ & $\mathrm{m^3s^{-1}}$ & since $Rn^2$ is $\mathrm{m^{-3}s^{-1}}$ \\
+$\Gamma_{\trap}$ & $\mathrm{s^{-1}}$ & first-order volume removal rate \\
+$s_{\trap}$ & $\mathrm{ms^{-1}}$ & boundary capture velocity \\
+$Q_{\mathrm{abs}}$ & $\mathrm{Jm^{-3}s^{-1}}$ & absorbed power density \\
+$\Delta$ & $\mathrm{J}$ or eV & quasiparticle gap energy \\
+$n_{\Omega}$ & $\mathrm{m^{-3}}$ & pair-breaking phonon density \\
+$\beta$ & $\mathrm{s^{-1}}$ & pair-breaking rate per phonon in reduced model \\
+$\tau_{\esc}$ & $\mathrm{s}$ & phonon escape time \\
+\bottomrule
+\end{longtable}
+
+\section{Appendix C: Practical assumptions for this project}
+The first implementation assumes:
+\begin{enumerate}[leftmargin=1.6em]
+    \item conventional $s$-wave superconductivity;
+    \item a scalar gap $\Delta(T)$;
+    \item scalar quasiparticle density rather than energy-resolved distribution;
+    \item effective diffusion in the superconducting film;
+    \item effective recombination coefficient $R$;
+    \item traps represented by volume rates or Robin capture velocities;
+    \item source terms derived from absorbed energy with an efficiency parameter;
+    \item optional pair-breaking phonon population for bottleneck studies.
+\end{enumerate}
+These assumptions are not weaknesses if stated clearly. They define the fidelity level of the model and make the computation feasible.
 
 \section{References}
 \begin{enumerate}[label={[\arabic*]}]
 \item J. Bardeen, L. N. Cooper, and J. R. Schrieffer, ``Theory of Superconductivity,'' \emph{Physical Review} \textbf{108}, 1175--1204 (1957).
+\item L. N. Cooper, ``Bound Electron Pairs in a Degenerate Fermi Gas,'' \emph{Physical Review} \textbf{104}, 1189--1190 (1956).
 \item M. Tinkham, \emph{Introduction to Superconductivity}, 2nd ed., Dover (2004).
-\item J. Koch et al., ``Charge-insensitive qubit design derived from the Cooper pair box,'' \emph{Physical Review A} \textbf{76}, 042319 (2007).
+\item J. R. Schrieffer, \emph{Theory of Superconductivity}, Westview Press (1999).
+\item G. D. Mahan, \emph{Many-Particle Physics}, 3rd ed., Springer (2000).
+\item C. Kittel, \emph{Introduction to Solid State Physics}, 8th ed., Wiley (2005).
+\item N. W. Ashcroft and N. D. Mermin, \emph{Solid State Physics}, Brooks/Cole (1976).
+\item A. Rothwarf and B. N. Taylor, ``Measurement of Recombination Lifetimes in Superconductors,'' \emph{Physical Review Letters} \textbf{19}, 27--30 (1967).
+\item S. B. Kaplan et al., ``Quasiparticle and Phonon Lifetimes in Superconductors,'' \emph{Physical Review B} \textbf{14}, 4854--4873 (1976).
 \item J. Aumentado, M. W. Keller, J. M. Martinis, and M. H. Devoret, ``Nonequilibrium quasiparticles and 2e periodicity in single-Cooper-pair transistors,'' \emph{Physical Review Letters} \textbf{92}, 066802 (2004).
+\item J. Koch et al., ``Charge-insensitive qubit design derived from the Cooper pair box,'' \emph{Physical Review A} \textbf{76}, 042319 (2007).
+\item P. J. de Visser et al., ``Number fluctuations of sparse quasiparticles in a superconductor,'' \emph{Physical Review Letters} \textbf{106}, 167004 (2011).
 \end{enumerate}
 
 \end{document}
