@@ -36,10 +36,9 @@ The intended physics chain is:
 \textbf{No.} & \textbf{Module} & \textbf{Purpose}\\
 \midrule
 1 & Ballistic-diffusive heat conduction at room temperature & Derive and implement the ballistic-diffusive heat-conduction equation from the Boltzmann transport equation under the relaxation-time approximation. The current priority is physics understanding: the note includes a detailed thin-film benchmark derivation, nondimensional form, finite-arrival-time ballistic flux, and slide-ready summaries.\\
-2 & Low-temperature superconducting material physics & Explain how the physics changes when the device is cooled below the superconducting transition temperature. Introduce the Bardeen-Cooper-Schrieffer energy gap, equilibrium and nonequilibrium quasiparticle density, superconducting heat capacity, quasiparticle diffusion, recombination, and trapping.\\
+2 & Low-temperature superconducting and nonequilibrium material physics & Serve as the main textbook-style superconductivity and implementation note for the project. Starting from normal-metal electrons, Fermi statistics, phonons, and electron-phonon coupling, derive the Cooper instability, BCS mean-field gap equation, Bogoliubov quasiparticles, equilibrium quasiparticle density, superconducting thermal-property reductions, quasiparticle diffusion, recombination, trapping, photon pair breaking, electron-phonon relaxation, pair-breaking phonons, phonon escape, Rothwarf-Taylor dynamics, and a full FEM derivation chain: strong form, weak form, shape functions, element mass/stiffness/trap/source matrices, nonlinear recombination vectors, global assembly, boundary conditions, implicit time stepping, Newton/Picard solves, and final field reconstruction.\\
 3 & Three-dimensional planar transmon geometry and FEM implementation & Hard-code a 3D planar transmon-like geometry in MATLAB, including substrate, capacitor pads, effective Josephson-junction region, normal-metal quasiparticle traps, and optional heat-sink patches. Assemble scalar thermal and quasiparticle diffusion-reaction FEM systems.\\
 4 & Physics-informed neural-network acceleration & Build a physics-informed surrogate that is trained from FEM data and constrained by PDE residuals, boundary conditions, initial conditions, and positivity/energy constraints. Use it to accelerate geometry, trap, and material sweeps.\\
-5 & Future nonequilibrium electron-phonon and photon physics & Document future extensions: photon absorption, pair breaking, hot electron relaxation, high-energy phonon generation, quasiparticle recombination, phonon escape, and coupled Rothwarf-Taylor-type nonequilibrium dynamics. No code is required in the first build.\\
 \bottomrule
 \end{longtable}
 
@@ -96,7 +95,7 @@ where $V_{\mathrm{trap}}$ penalizes excessive normal-metal trap volume and $P_{\
 \texttt{matlab/src/geometry/} & Geometry parameters and hard-coded cuboid representation of the planar transmon.\\
 \texttt{matlab/src/materials/} & Material property models for substrate, superconducting films, and traps.\\
 \texttt{matlab/src/module1\_bd/} & Ballistic-diffusive thin-film validation code.\\
-\texttt{matlab/src/module2\_superconducting/} & BCS gap, equilibrium quasiparticle density, diffusivity, recombination, and trap-rate helper functions.\\
+\texttt{matlab/src/module2\_superconducting/} & BCS gap, equilibrium quasiparticle density, diffusivity, recombination, trap-rate helper functions, and reduced nonequilibrium source/coupling models.\\
 \texttt{matlab/src/module3\_fem/} & 3D scalar FEM assembly for thermal and quasiparticle diffusion-reaction equations.\\
 \texttt{matlab/src/module4\_pinn/} & PINN/surrogate model definitions, loss functions, and training skeleton.\\
 \texttt{outputs/} & Generated figures, data, and case summaries.\\
