@@ -1,6 +1,6 @@
 # FEM_BallisticDiffusion_PINN
 
-MATLAB project for finite-element modeling of ballistic-diffusive heat transport and quasiparticle diffusion/trapping in a planar superconducting transmon-like geometry, with a physics-informed neural-network surrogate layer for later acceleration.
+MATLAB project for finite-element modeling of ballistic-diffusive heat transport and quasiparticle diffusion/trapping in a planar superconducting transmon-like geometry, with a physics-informed neural-network surrogate layer for later acceleration.  `This work was conducted with the assistance of a large language model (LLM)`
 
 ## Project logic
 
